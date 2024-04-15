@@ -1,0 +1,69 @@
+name: Custom.Windows.System.PowerShell.ListMountedVolumes
+description: |
+  Modified Windows.System.PowerShell to List Mounted Volumes in the format of:
+  
+  DevicePath               DriveLetter
+    ----------               -----------
+    \Device\HarddiskVolume2  F:         
+    \Device\HarddiskVolume7  J:         
+    \Device\HarddiskVolume10 D:         
+    \Device\HarddiskVolume12 E:         
+    \Device\HarddiskVolume5  C:    
+
+required_permissions:
+  - EXECVE
+
+precondition:
+  SELECT OS From info() where OS = 'windows'
+
+parameters:
+  - name: PowerShellExe
+    default: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+  - name: Command
+    default: |
+        # Build System Assembly in order to call Kernel32:QueryDosDevice.
+        $DynAssembly = New-Object System.Reflection.AssemblyName('SysUtils')
+        $AssemblyBuilder = [AppDomain]::CurrentDomain.DefineDynamicAssembly($DynAssembly, [Reflection.Emit.AssemblyBuilderAccess]::Run)
+        $ModuleBuilder = $AssemblyBuilder.DefineDynamicModule('SysUtils', $False)
+        
+        # Define [Kernel32]::QueryDosDevice method
+        $TypeBuilder = $ModuleBuilder.DefineType('Kernel32', 'Public, Class')
+        $PInvokeMethod = $TypeBuilder.DefinePInvokeMethod('QueryDosDevice', 'kernel32.dll', ([Reflection.MethodAttributes]::Public -bor [Reflection.MethodAttributes]::Static), [Reflection.CallingConventions]::Standard, [UInt32], [Type[]]@([String], [Text.StringBuilder], [UInt32]), [Runtime.InteropServices.CallingConvention]::Winapi, [Runtime.InteropServices.CharSet]::Auto)
+        $DllImportConstructor = [Runtime.InteropServices.DllImportAttribute].GetConstructor(@([String]))
+        $SetLastError = [Runtime.InteropServices.DllImportAttribute].GetField('SetLastError')
+        $SetLastErrorCustomAttribute = New-Object Reflection.Emit.CustomAttributeBuilder($DllImportConstructor, @('kernel32.dll'), [Reflection.FieldInfo[]]@($SetLastError), @($true))
+        $PInvokeMethod.SetCustomAttribute($SetLastErrorCustomAttribute)
+        $Kernel32 = $TypeBuilder.CreateType()
+        
+        $Max = 65536
+        $StringBuilder = New-Object System.Text.StringBuilder($Max)
+        
+        # Create an array to store the results
+        $results = @()
+        
+        Get-WmiObject Win32_Volume | Where-Object { $_.DriveLetter } | ForEach-Object {
+            $ReturnLength = $Kernel32::QueryDosDevice($_.DriveLetter, $StringBuilder, $Max)
+        
+            if ($ReturnLength) {
+                $DriveMapping = [PSCustomObject]@{
+                    DevicePath  = $StringBuilder.ToString()
+                    DriveLetter = $_.DriveLetter
+                }
+                $results += $DriveMapping
+            }
+        }
+        
+        # Export the results to a CSV file
+        $results | Export-Csv -Path "$env:windir\Temp\DriveMappings.csv" -NoTypeInformation
+
+
+sources:
+  - query: |
+        LET csv_path = SELECT OSPath FROM glob(globs=expand(path='%windir%\\Temp\\DriveMappings.csv'), accessor="auto")
+    
+          LET _ <= SELECT * FROM execve(argv=[PowerShellExe,
+            "-ExecutionPolicy", "Unrestricted", "-encodedCommand",
+            base64encode(string=utf16_encode(string=Command))
+          ])
+          
+          SELECT * FROM parse_csv(filename=csv_path[0].OSPath)

@@ -1,0 +1,74 @@
+name: Custom.Server.Monitor.Autolabeling.Clients
+author: Thomas Benos
+description: |
+    Modified Stephan Mikiss's Artifact
+
+    This server side event monitoring artifact watches for new client enrollments and automatically labels them according to their domain roles.
+    It checks for already set labels, which deletes, and assign automatically Domain Role, Username, IP Address and Domain labels.
+    
+    Relabeling of all clients even after they were enrolled can be achieved by starting a hunt for `Custom.Generic.Client.Info`. The labels are either Set or Cleared so it is fine to re-apply the label many times.
+    
+type: SERVER_EVENT
+sources:
+- query: |
+    
+    LET interrogations = SELECT *
+        FROM watch_monitoring(artifact="System.Flow.Completion")
+        WHERE Flow.artifacts_with_results =~ "Custom.Generic.Client.Info/AgentInfo|Custom.Generic.Client.Info/BasicInformation"
+    
+    LET check_username=SELECT `Computer Info`.UserName as username FROM source(artifact="Custom.Generic.Client.Info/AgentInfo")
+    
+    LET check_name = SELECT `Computer Info`.Name as name FROM source(artifact="Custom.Generic.Client.Info/AgentInfo")
+    
+    LET network_info = SELECT `Network Info`.IPAddresses as IPAddresses FROM source(artifact="Custom.Generic.Client.Info/AgentInfo")
+    LET ip_addresses = SELECT IPAddresses FROM flatten(query={SELECT * FROM flatten(query={SELECT * FROM network_info})})
+
+    LET matches = SELECT * FROM chain(
+        //Remove all labels first
+        a={
+            SELECT * FROM foreach(
+            row={SELECT labels AS old_labels FROM clients(client_id=ClientId)},
+            query={SELECT label(client_id=ClientId, labels=old_labels, op="remove") FROM clients(client_id=ClientId)
+                //label deletion exclusions
+                    WHERE 
+                    --old_labels != "uHNDGS" AND old_labels != "uAGS" AND old_labels != "uAFGS" AND old_labels != "uNGS" AND 
+                    old_labels != "Quarantine"
+                }
+            )
+        },
+        b={
+            SELECT * FROM foreach(
+            row={SELECT config.Labels as ConfigLabels FROM info(client_id=ClientId)},
+            query={SELECT label(client_id=ClientId, labels=ConfigLabels, op="set") FROM clients(client_id=ClientId)}
+            )
+        },
+        c={
+            SELECT *,label(client_id=ClientId, labels=`Computer Info`.DomainRole, op="set") FROM 
+            source(artifact="Custom.Generic.Client.Info/AgentInfo")
+        }, 
+            //WHERE `Computer Info`.DomainRole =~"Workstation"},
+        //b={SELECT *,label(client_id=ClientId, labels="Server", op="set") FROM source(
+        //    artifact="Generic.Client.Info/WindowsInfo") WHERE `Computer Info`.DomainRole =~"Server"},
+        //c={SELECT *,label(client_id=ClientId, labels="Domain Controller", op="set") FROM source(artifact="Generic.Client.Info/WindowsInfo") 
+        //WHERE `Computer Info`.DomainRole =~"Domain Controller"},
+        d={
+        SELECT * FROM if(
+            condition=check_name[0].name != Null,
+            then={SELECT *,label(client_id=ClientId, labels=`Computer Info`.Name, op="set") FROM source(artifact="Custom.Generic.Client.Info/AgentInfo")}
+            )
+        },
+        e={SELECT *,label(client_id=ClientId, labels=`Computer Info`.Domain, op="set") FROM source(artifact="Custom.Generic.Client.Info/AgentInfo")},
+        f={
+        SELECT * FROM foreach(
+                row={SELECT IPAddresses as ip_address FROM ip_addresses},
+                query={SELECT *, label(client_id=ClientId, labels=ip_address, op="set") FROM scope()}
+            )      
+        },
+        //for the UserName label, you must add the UserName in the query that builds Computer Info in Generic.Client.Info/WindowsInfo 
+        g={SELECT * FROM if(condition=check_username[0].username != Null,
+        then={SELECT *,label(client_id=ClientId, labels=`Computer Info`.UserName, op="set") FROM source(artifact="Custom.Generic.Client.Info/AgentInfo")}   
+        )}
+    )
+       
+    SELECT * FROM foreach(row=interrogations, query=matches)
+    

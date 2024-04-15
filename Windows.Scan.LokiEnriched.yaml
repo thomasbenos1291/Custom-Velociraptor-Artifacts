@@ -1,0 +1,148 @@
+name: Custom.Windows.Scan.LokiEnriched
+description: |
+
+  This artifact deploys a Loki scanner and search for IOCs. Loki requires Internet connectivity to fetch the
+  latest IOCs and YARA rules.
+
+  Based on the artifact developed by Eduardo Mattos - @eduardfir
+  and Xavier Mertens @xme.
+  
+  You have to include the signature-base folder inside the loki.zip\loki folder.
+    
+  NOTE: This artifact usually transfers a lot of data. You should increase the default timeout to allow it to complete.
+    
+author: Thomas Benos
+
+reference: 
+    - https://github.com/Neo23x0/signature-base
+    - https://blog.rootshell.be/2021/12/21/velociraptor-loki/
+    - https://github.com/eduardomcm/VelociraptorCompetition/blob/main/Windows.Scanner.Loki.yaml
+    - https://github.com/Neo23x0/Loki
+
+tools:
+  - name: loki_0.44.2
+    url: https://github.com/Neo23x0/Loki/releases/download/v0.44.2/loki_0.44.2.zip
+
+precondition: 
+  SELECT OS From info() where OS = 'windows'
+  
+parameters:
+  - name: Upgrade
+    type: bool
+    description: If checked, loki will update its signatures before scanning.
+  - name: Drive
+    type: string
+    default: "C:/"
+    description: Drive to scan (C:\)
+  - name: Kilobyte
+    type: string
+    description: Maximum file size to check in KB (default 5000 KB).
+  - name: IntenseScan
+    type: bool
+    description: Perform intense scan
+  - name: NoProcScan
+    type: bool
+    description: Skip the process scan
+  - name: NoFileScan
+    type: bool
+    description: Skip the file scan
+  - name: VulnChecks
+    type: bool
+    description: Run the vulnerability checks
+  - name: NoLevCheck
+    type: bool
+    description: Skip the Levenshtein distance check
+  - name: SkipRootkit
+    type: bool
+    description: Skip the rootkit check
+  - name: NoPeSieve
+    type: bool
+    description:  Do not perform pe-sieve scans
+  - name: PeSieveShellc
+    type: bool
+    description: Perform pe-sieve shellcode scan
+  - name: NoListen
+    type: bool
+    description: Do not show listening connections
+  - name: ExcludeProcess
+    type: string
+    description: Specify an executable name to exclude from scans.
+  - name: OnlyRelevant
+    type: bool
+    description: Log only relevant information
+  - name: Length
+    description: Size (in bytes) of output that will be returned for a single row.  This value may need to be adjusted depending on the size of your event logs.
+    type: int
+    default: "10000000"
+    
+sources:
+  - query: |
+        
+        //Kill other Loki active processes for loki to start
+        LET KillLoki <= SELECT * FROM execve(argv=filter(list=["cmd.exe", "/c", "taskkill", "/F", "/IM", "loki.exe"], 
+                        regex=".")) WHERE log(message=Stdout)
+        
+        //Download the tool in .zip
+        LET Toolzip <= SELECT OSPath FROM Artifact.Generic.Utils.FetchBinary(ToolName="loki_0.44.2", IsExecutable=FALSE)
+        WHERE log(message= "OSPath of the tool is " + OSPath)
+        
+        
+        LET Hostname <= SELECT Hostname as Host FROM info()
+        LET LogFile <= "C:\\Windows\\Temp\\loki\\loki.csv"
+        --tempfile(extension=".csv", remove_last=TRUE)
+        --LET YaraUrlContent <= SELECT Content FROM http_client(method="GET", url=YaraUrl)
+        LET UnzipIt <= SELECT OSPath FROM unzip(filename=Toolzip.OSPath, output_directory=expand(path="%SYSTEMROOT%\\Temp"))
+        WHERE log(message= "OSPath to unzip is " + OSPath)
+        
+        --Upgrade Loki
+        LET UpgradeLoki <= SELECT * FROM if(condition=Upgrade, then={SELECT * FROM execve(argv=filter(list=[
+                        "C:\\Windows\\Temp\\loki\\loki-upgrader.exe", "--nolog"
+                        ], regex="."))})
+                        WHERE log(message=Stdout)
+        
+        --command build
+        LET ExecLoki <= SELECT * FROM execve(argv=filter(list=[
+                        "powershell.exe", "/c",
+                        --"Stop-Process", "-Name", "loki.exe", "--Force", "&&",
+                        "C:\\Windows\\Temp\\loki\\loki.exe", 
+                        "--noindicator",
+                        if(condition=Drive, then="-p", else="--alldrives"),
+                        if(condition=Drive, then=Drive, else=""),
+                        if(condition=Kilobyte, then="-s", else=""),
+                        if(condition=Kilobyte, then=Kilobyte, else=""),
+                        "-l",
+                        "C:\\Windows\\Temp\\loki\\loki.csv",
+                        --'"'+LogFile+'"', 
+                        "--csv", 
+                        "--dontwait",
+                        if(condition=NoProcScan, then="--noprocscan", else=""),
+                        if(condition=NoFileScan, then="--nofilescan", else=""),
+                        if(condition=VulnChecks, then="--vulnchecks", else=""),
+                        if(condition=NoLevCheck, then="--nolevcheck", else=""),
+                        if(condition=SkipRootkit, then="--rootkit", else=""),
+                        if(condition=NoPeSieve, then="--nopesieve", else=""),
+                        if(condition=PeSieveShellc, then="--pesieveshellc", else=""),
+                        if(condition=NoListen, then="--nolisten", else=""),
+                        if(condition=ExcludeProcess, then="--excludeprocess", else=""),
+                        if(condition=ExcludeProcess, then=ExcludeProcess, else=""),
+                        if(condition=OnlyRelevant, then="--onlyrelevant", else=""),
+                        if(condition=IntenseScan, then="--intense", else="")], 
+                        regex=".")) 
+                        WHERE log(message=Stdout)
+        
+        --parse the result
+        SELECT Time, Hostname, DetectionType, ScanType, 
+        if(condition=parse_string_with_regex(string=Detection, regex='''(?:REASON_1:\s)(.*?)(?:REASON_2:|$)''').g1 = NULL, then=Detection) as Information,
+        parse_string_with_regex(string=Detection, regex='''FILE:\s(.*?)\s''').g1 as File,
+        parse_string_with_regex(string=Detection, regex='''\bSCORE\b:\s(.*?)\s''').g1 as Score,
+        parse_string_with_regex(string=Detection, regex='''TYPE:\s(.*?)\s''').g1 as Type,
+        parse_string_with_regex(string=Detection, regex='''SIZE:\s(.*?)\s''').g1 as Size,
+        parse_string_with_regex(string=Detection, regex='''SHA256:\s(.*?)\s''').g1 as SHA256,
+        parse_string_with_regex(string=Detection, regex='''(?:REASON_1:\s)(.*?)(?:REASON_2:|$)''').g1 as Detection1,
+        parse_string_with_regex(string=Detection, regex='''(?:REASON_2:\s)(.*?)(?:REASON_3:|$)''').g1 as Detection2
+        //parse_string_with_regex(string=Detection, regex='''(?:REASON_3:\s)(.*?)(?:REASON_4:|$)''').g1 as Detection3,
+        //parse_string_with_regex(string=Detection, regex='''(?:REASON_4:\s)(.*?)(?:REASON_5:|$)''').g1 as Detection4,
+        //parse_string_with_regex(string=Detection, regex='''(?:REASON_5:\s)(.*?)(?:REASON_6:|$)''').g1 as Detection5
+            FROM split_records(filenames="C:\\Windows\\Temp\\loki\\loki.csv", accessor="auto", regex="," , 
+                columns=['Time', 'Hostname', 'DetectionType', 'ScanType', 'Detection'], count=5)
+        

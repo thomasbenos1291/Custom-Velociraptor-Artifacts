@@ -1,0 +1,133 @@
+name: Custom.Artifact.Windows.Search.AlienVault
+author: Thomas Benos
+description: |
+   Download a .csv file from AlienVault and hunt the endpoint. 
+   You have to provide the .csv download url or a custom csv file with IOCs.
+   Strongly recommended to do the file search and the event log search in different hunts as to not take too long.
+
+type: CLIENT
+
+parameters:
+   - name: ioc_csv
+     description: AlienVault Url for .csv indicators file or custom csv file with iocs. 
+     type: upload
+   - name: alert_name
+     description: The alert description
+     type: string
+   - name: search_browser_history
+     description: If set, will search browser history for URLs
+     type: bool
+   - name: search_processes
+     description: If set, will search active processes for file hashes
+     type: bool
+   - name: search_network_connections
+     description: If set, will search active network connections for IP addresses
+     type: bool
+   - name: search_DNS_cache
+     description: If set, will search DNS cache for IP addresses, domains and usernames
+     type: bool
+   - name: search_sysmon_logs
+     description: If set, will search Sysmon event logs for every indicator
+     type: bool
+   - name: search_files_glob
+     description: If set, will search all files in the glob path for filehashes. Default is all files
+     type: string
+     default: "**/**/**"
+   - name: search_amcache
+     description: If set, will search AmCache for file hashes
+     type: bool
+     
+sources:
+  - precondition:
+      SELECT OS From info() where OS = 'windows'
+    query: |
+       
+        --Parse the csv    
+        LET results <= 
+                SELECT * FROM parse_csv(filename=tempfile(remove_last=TRUE, data=ioc_csv, extension=".csv"), 
+                comment="#", auto_headers=TRUE, 
+                columns=["Indicator type","Indicator","Description"]) GROUP BY Indicator
+        
+        /*LET Sysmon_Indicators = SELECT Indicator FROM results WHERE `Indicator type` =~ '''IPv.*''' 
+        OR `Indicator type` =~ '''FileHash-MD5''' 
+        OR `Indicator type` =~ '''FileHash-SHA256''' 
+        OR `Indicator type` = '''hostname'''
+        */
+        LET IPAddresses = SELECT Indicator FROM results WHERE `Indicator type` =~ '''IP.*'''
+        LET URL_indicators = SELECT Indicator FROM results WHERE `Indicator type` =~ '''URL'''
+        LET MD5 = SELECT Indicator FROM results WHERE `Indicator type` =~ '''.*MD5.*'''
+        LET MD5List = SELECT join(array=MD5.Indicator, sep=' ') as MD5 FROM scope()
+        LET SHA1 = SELECT Indicator FROM results WHERE `Indicator type` =~ '''.*SHA1.*'''
+        LET SHA1List = SELECT join(array=SHA1.Indicator, sep=' ') as SHA1 FROM scope()
+        LET SHA256 = SELECT Indicator FROM results WHERE `Indicator type` =~ '''.*SHA256.*'''
+        LET SHA256List = SELECT join(array=SHA256.Indicator, sep=' ') as SHA256 FROM scope()
+        LET Domains = SELECT Indicator FROM results WHERE `Indicator type` = '''.*domain.*'''
+        LET Hostnames = SELECT Indicator FROM results WHERE `Indicator type` = '''.*hostname.*'''
+       
+        LET browsing_history = SELECT alert_name, "Browser History" as artifact, * FROM Artifact.Windows.Applications.Chrome.History() 
+        WHERE visited_url IN URL_indicators.Indicator OR visited_url IN Domains.Indicator OR visited_url IN Hostnames.Indicator
+        
+        LET processes = SELECT alert_name, "Active Processes" as artifact, * FROM Artifact.Windows.System.Pslist()
+        where Hash.MD5 in MD5.Indicator OR
+        Hash.SHA256 in SHA256.Indicator OR
+        Hash.SHA1 in SHA1.Indicator
+        
+        LET network_connections = SELECT alert_name, "Network Connections" as artifact, * FROM Artifact.Windows.Network.Netstat()
+        where `Raddr.IP` in IPAddresses.Indicator
+        
+        LET DNSCache = SELECT alert_name, "DNS Cache" as artifact, * FROM Artifact.Custom.Windows.System.DNSCache()
+        where Name IN IPAddresses.Indicator or Name IN Domains.Indicator or Name IN Hostnames.Indicator
+        or Record IN IPAddresses.Indicator or Record IN Domains.Indicator or Record IN Hostnames.Indicator
+        
+        LET event_logs = SELECT alert_name, "Event Logs" as artifact, * 
+        from Artifact.Windows.EventLogs.EvtxHunter (EvtxGlob = '''%SystemRoot%\System32\Winevt\Logs\*.evtx''', 
+        ProviderRegex='''.*Sysmon.*''') WHERE
+        //SHA1SUM IN SHA1.Indicator OR 
+        parse_string_with_regex(string=Message, regex='''MD5=(.*?),''').g1 IN MD5.Indicator OR 
+        parse_string_with_regex(string=Message, regex='''SHA256=(.*?),''').g1 IN SHA256.Indicator OR 
+        EventData.SourceIp IN IPAddresses.Indicator OR EventData.DestinationIp IN IPAddresses.Indicator OR
+        EventData.SourceHostname IN Hostnames.Indicator OR EventData.DestinationHostname IN Hostnames.Indicator
+        GROUP BY EventRecordID ORDER BY EventTime
+            
+        LET file_search = SELECT alert_name, "File Search" as artifact, * FROM Artifact.Generic.Detection.HashHunter(MD5List=MD5List[0].MD5, 
+        SHA1List=SHA1List[0].SHA1,
+        SHA256List=SHA256List[0].SHA256,
+        TargetGlob=search_files_glob)
+        
+        LET amcache = SELECT alert_name, "Registry AmCache" as artifact, 
+        HivePath,
+        EntryKey,
+        KeyMTime,
+        EntryType,
+        SHA1 as SHA_1,
+        EntryName,
+        EntryPath,
+        Publisher,
+        OriginalFileName,
+        BinaryType
+        FROM Artifact.Windows.Detection.Amcache()
+        WHERE SHA1_1 IN SHA1.Indicator
+
+        SELECT * FROM chain(async=TRUE,
+            a={
+                SELECT * FROM if(condition=search_browser_history, then=browsing_history)
+            },
+            b={
+                SELECT * FROM if(condition=search_processes, then=processes)
+            },
+            c={
+                SELECT * FROM if(condition=search_sysmon_logs, then=event_logs)
+            },
+            d={
+                SELECT * FROM if(condition=search_DNS_cache, then=DNSCache)
+            },
+            e={
+                SELECT * FROM if(condition=search_files_glob, then=file_search)
+            },
+            f={
+                SELECT * FROM if(condition=search_amcache, then=amcache)
+            },
+            g={
+                SELECT * FROM if(condition=search_network_connections, then=network_connections)
+            }
+        )

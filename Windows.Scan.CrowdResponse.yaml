@@ -1,0 +1,207 @@
+name: Custom.Windows.Scan.CrowdResponse
+description: |
+
+  This artifact deploys CrowdResponse for yara scanning.
+  The configuration file must either be uploaded or entered in the appropriate field.
+  
+  YARA
+  
+  -a            - Scan active processes memory
+  -b            - Scan active processes executable files
+  -c            - Strict SSL cert adherence for -u. Default is ignore bad certs
+  -d <depth>    - Target path recursion depth (0 = top level only, 1 = 1 level down etc)
+  -e <filter>   - Target file path exclusion regex filter pattern
+  -f <mask>     - Target file name mask. Default is "*.*"
+  -h            - Only show positive hits
+  -i <filter>   - Target file path inclusion regex filter pattern
+  -m <mask>     - YARA rule file name mask. Default is "*.yar"
+  -n <filter>   - YARA rule file path inclusion regex filter pattern
+  -o            - Scan all loaded module files of active processes
+  -p <pid>      - Single process ID to scan
+  -r            - Recurse into YARA rules directory
+  -s            - Recurse into target directories
+  -t <dir>      - Starting target files directory
+  -u <url>      - Download and run YARA file from URL
+  -v            - Enable additional informational output
+  -x <filter>   - YARA rule file path exclusion regex filter pattern
+  -y <dir>      - YARA rules directory
+  
+  Examples:
+  @yara -h -s -f *.* -a -b -v -o
+  @yara -t %systemdrive% -h -s -f *.* -a -b -v -o
+  
+author: Thomas Benos
+
+tools:
+  - name: CrowdResponse
+    url: https://www.crowdstrike.com/wp-content/uploads/2020/03/CrowdResponse.zip
+    
+precondition: 
+  SELECT OS From info() where OS = 'windows'
+  
+parameters:
+  - name: CRConfigFile
+    description: If configured will attempt to download the configuration from Url
+    type: upload
+  - name: CRConfigText
+    type: string
+    description: |
+        Final option if the file is not provided. You must include:
+        
+        a. The @yara command, for example: @yara -h -s -f *.* -a -b -v -o
+        b. The "[<SECTION:yara]" identifier, that implicates the start of yara rules.
+        c. Your yara rules, in between.
+        d. The "[</SECTION]" identifier in the end.
+        
+        YARA
+  
+          -a            - Scan active processes memory
+          -b            - Scan active processes executable files
+          -c            - Strict SSL cert adherence for -u. Default is ignore bad certs
+          -d <depth>    - Target path recursion depth (0 = top level only, 1 = 1 level down etc)
+          -e <filter>   - Target file path exclusion regex filter pattern
+          -f <mask>     - Target file name mask. Default is "*.*"
+          -h            - Only show positive hits
+          -i <filter>   - Target file path inclusion regex filter pattern
+          -m <mask>     - YARA rule file name mask. Default is "*.yar"
+          -n <filter>   - YARA rule file path inclusion regex filter pattern
+          -o            - Scan all loaded module files of active processes
+          -p <pid>      - Single process ID to scan
+          -r            - Recurse into YARA rules directory
+          -s            - Recurse into target directories
+          -t <dir>      - Starting target files directory
+          -u <url>      - Download and run YARA file from URL
+          -v            - Enable additional informational output
+          -x <filter>   - YARA rule file path exclusion regex filter pattern
+          -y <dir>      - YARA rules directory
+          
+          Examples:
+          @yara -h -s -f *.* -a -b -v -o
+          @yara -t %systemdrive% -h -s -f *.* -a -b -v -o
+          
+    default: |
+        @yara -t "%systemdrive%" -h -s -f *.* -a -b -v -o
+        
+        [<SECTION:yara>]
+
+        rule Derusbi_DeepPanda : Deep Panda Derusbi
+        {
+        	strings:
+            	$a = "DUDE_AM_I_SHARP"
+                $b = "c0d0so0"
+                $c = "BASTARD_&&_BITCHES"
+                $d = "WHO_A_R_E_YOU?"
+                $cookie = "pgv_pvid=%016I64d"
+                $f = "3a 24 3a 2c 3a 34 3a 3c 3a 44 3a 4c 3a 54 3a 5c 3a 64 3a 6c 3a 74 3a 7c 3a"
+                $g = "3c 24 3c 2c 3c 34 3c 3c 3c 44 3c 4c 3c 54 3c 5c 3c 64 3c 6c 3c 74 3c 7c 3c"
+                $h = "3d 24 3d 2c 3d 34 3d 3c 3d 44 3d 4c 3d 54 3d 5c 3d 64 3d 6c 3d 74 3d 7c 3d"
+                $i = "3e 24 3e 2c 3e 34 3e 3c 3e 44 3e 4c 3e 54 3e 5c 3e 64 3e 6c 3e 74 3e 7c 3e"
+                $j = "3f 24 3f 2c 3f 34 3f 3c 3f 44 3f 4c 3f 54 3f 5c 3f 64 3f 6c 3f 74 3f 7c 3f"
+                $k = "30 24 30 2c 30 34 30 3c 30 44 30 4c 30 54 30 5c 30 64 30 6c 30 74 30 7c 30"
+                $l = "31 24 31 2c 31 34 31 3c 31 44 31 4c 31 54 31 5c 31 64 31 6c 31 74 31 7c 31"
+                $m = "32 24 32 2c 32 34 32 3c 32 44 32 4c 32 54 32 5c 32 64 32 6c 32 74 32 7c 32"
+                $n = "33 24 33 2c 33 34 33 3c 33 44 33 4c 33 54 33 5c 33 64 33 6c 33 74 33 7c 33"
+                $o = "34 24 34 2c 34 34 34 3c 34 44 34 4c 34 54 34 5c 34 64 34 6c 34 74 34 7c 34"
+                $p = "35 24 35 2c 35 34 35 3c 35 44 35 4c 35 54 35 5c 35 64 35 6c 35 74 35 7c 35"
+                $q = "36 24 36 2c 36 34 36 3c 36 44 36 4c 36 54 36 5c 36 64 36 6c 36 74 36 7c 36"
+                $r = "37 24 37 2c 37 34 37 3c 37 44 37 4c 37 54 37 5c 37 64 37 6c 37 74 37 7c 37"
+                $s = "38 24 38 2c 38 34 38 3c 38 44 38 4c 38 54 38 5c 38 64 38 6c 38 74 38 7c 38"
+                $t = "39 24 39 2c 39 34 39 3c 39 44 39 4c 39 54 39 5c 39 64 39 6c 39 74 39 7c 39"
+                $u = "Ace123dx!@#x"
+                $v = "Le12xv10"
+                $pcc1 = "PCC_MISC"
+                $pcc2 = "PCC_CMD"
+                $pcc3 = "PCC_SOCK"
+                $pcc4 = "PCC_SUPER_SOCK"
+                $pcc5 = "PCC_PROXY"
+        	$isapi  = "ISAPI_CONNECT"
+                $bdsock = "BD_SOCK"
+                $bddns  = "BD_DNS"        
+                
+            condition:
+            	$a or $cookie or $b or $c or $d or $u or $v or 2 of ($pcc1,$pcc2,$pcc3,$pcc4,$pcc5,$isapi,$bdsock,$bddns) or 2 of ($f,$g,$h,$i,$j,$k,$l,$m,$n,$o,$p,$q,$r,$s,$t)
+        }
+        
+        rule CrowdStrike_CSIT_14004_01 : loader backdoor bouncer 
+        { 
+        	meta: 
+        		description = "Deep Panda ASP.NET Webshell" 
+        		last_modified = "2013-02-03" 
+        		version = "1.0" 
+        		report = "CSIT-14004"
+        		in_the_wild = true 
+        		copyright = "CrowdStrike, Inc" 
+        		actor = "DEEP PANDA" 
+        	strings: 
+        		$cookie = "Cookies[\"zWiz\"]" 
+        		$cp = "IndexOf(\"es-DN\")" 
+        		$keep_alive = "[\"Keep-Alive\"] == \"320\"" 
+        	condition: 
+        		any of them 
+        }
+        
+        rule CrowdStrike_CSIT_14004_02 : loader backdoor bouncer
+        {
+           meta:
+        	description = "Deep Panda Compiled ASP.NET <http://ASP.NET> Webshell"
+        	last_modified = "2014-04-25"
+        	version = "1.0"
+        	report = "CSIT-14004"
+        	in_the_wild = true
+        	copyright = "CrowdStrike, Inc"
+        	actor = "DEEP PANDA"
+           strings:
+        	$cookie = "zWiz\x00" wide
+        	$cp = "es-DN" wide
+        
+        	$enum_fs1 = "File system: {0}" wide
+        	$enum_fs2 = "Available: {0} bytes" wide
+        	$enum_fs3 = "Total space: {0} bytes" wide
+        	$enum_fs4 = "Total size: {0} bytes" wide
+           condition:
+        	($cookie and $cp) or all of ($enum*)
+        }
+        
+        [</SECTION>]
+        
+        
+sources:
+  - query: |
+        
+        --Kill any existing CR processes
+        LET KillCR <= SELECT * FROM execve(argv=filter(list=["cmd.exe", "/c", "taskkill", "/F", "/IM", "CrowdResponse.exe"], 
+                regex=".")) WHERE log(message=Stdout)
+                
+        --Download the tool
+        LET Toolzip <= SELECT OSPath FROM Artifact.Generic.Utils.FetchBinary(ToolName="CrowdResponse", IsExecutable=FALSE)
+        
+        --Create a temporary directory to unzip the tool
+        LET TmpDir <= tempdir(remove_last=TRUE)
+        
+        --Unzip the tool
+        --LET UnzipIt <= SELECT unzip(filename=Toolzip.OSPath, output_directory=TmpDir) FROM scope()
+        LET UnzipIt <= SELECT * FROM unzip(filename=Toolzip.OSPath, output_directory=TmpDir)
+        
+        --Declare the configuration file data
+        LET config_data <= CRConfigFile || CRConfigText
+        
+        --Create the configuration file with the data
+        LET config_file <= tempfile(remove_last=TRUE, data=config_data, extension=".txt")
+        
+        --Create the configuration file with the data
+        LET xmlfile <= tempfile(extension=".xml")
+        
+        -- Execute CrowdResponse
+        LET ExecCR <= 
+        SELECT * FROM chain(
+            a={SELECT * FROM execve(argv=filter(list=["cmd.exe", "/c",
+                        TmpDir+"\\CrowdResponse.exe", "-i", config_file, "-o", xmlfile
+                        ],regex="."))
+                        WHERE log(message=Stderr)},
+            b={SELECT * FROM execve(argv=filter(list=["cmd.exe", "/c",
+            TmpDir+"\\CRConvert.exe", "-c", "-v", "-f", xmlfile, "-o", TmpDir
+            ],regex=".")) WHERE log(message=Stderr)}
+        )
+        
+        
+        SELECT * FROM parse_csv(filename=TmpDir+"\\CrowdResponse_yara.csv")
