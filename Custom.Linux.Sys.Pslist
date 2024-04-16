@@ -1,0 +1,40 @@
+name: Custom.Linux.Sys.Pslist
+description: |
+  List processes and their running binaries.
+
+parameters:
+  - name: processRegex
+    default: .
+    type: regex
+
+precondition: |
+  SELECT OS From info() where OS =~ 'linux|darwin'
+
+sources:
+  - query: |
+  
+        LET parent_process_calc(parent_id) = SELECT Exe FROM process_tracker_pslist(pid=parent_id)
+        
+        --LET processes = 
+        SELECT Pid, CommandLine, Exe, Username, Ppid, Name,
+        parent_process_calc(parent_id=Ppid)[0].Exe as ParentProcess,
+        join(array=process_tracker_callchain(id=Pid).Data.Name, sep="->") as ProcessTree,
+        process_tracker_tree(id=Pid).children as ChildProcesses,
+        process_tracker_tree(id=Pid).data.StartTime as StartTime,
+               hash(path=Exe).SHA256 as SHA256,
+               --timestamp(epoch=CreateTime/1000) AS CreatedTime,
+               --authenticode(filename=Exe).Trusted AS Trusted, Memory.WorkingSetSize AS WorkingSetSize,
+               --MemoryInfo.RSS AS RSS,
+               Exe =~ "\\(deleted\\)$" AS Deleted
+        FROM pslist()
+        WHERE Name =~ processRegex
+        
+        --LET network_conn(process_id) = SELECT * FROM Artifact.Linux.Network.Netstat() WHERE ProcessInfo.Pid = process_id
+        --SELECT * FROM network_conn(process_id=3736)
+        
+        --SELECT * FROM foreach(
+        --row={SELECT Pid FROM processes},
+        --query={SELECT *, {SELECT State, LocalAddr.IP as `Laddr.IP`, LocalAddr.Port as `Laddr.Port`, RemoteAddr.IP as `Raddr.IP`, 
+        --RemoteAddr.Port AS `Raddr.Port`FROM network_conn(process_id=Pid)} as ActiveConnections 
+        --FROM processes}
+        --)
