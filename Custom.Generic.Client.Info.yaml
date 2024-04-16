@@ -141,7 +141,7 @@ sources:
         then={SELECT *, 
         {SELECT * from Artifact.Server.Enrichment.MalwareBazaar(Hash=SHA256)} as MalwareBazaar
         FROM Artifact.Custom.Windows.System.Pslist()},
-        else={SELECT * FROM Artifact.Custom.Linux.Sys.Pslist()})
+        else={SELECT * FROM Artifact.Linux.Sys.Pslist()})
 
   - name: Network_Connections
     query: |
