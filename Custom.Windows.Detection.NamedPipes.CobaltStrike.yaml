@@ -1,0 +1,89 @@
+name: Custom.Windows.Detection.NamedPipes.CobaltStrike
+author: Thomas Benos
+description: |
+    Search for any process handles that match known CobaltStrike named pipe patterns.
+    
+    Credits to @svch0st, https://gist.github.com/svch0stz
+
+parameters:
+  - name: ProcessRegex
+    description: A regex applied to process names.
+    default: .
+    type: regex
+  - name: PidRegex
+    default: .
+    type: regex
+  - name: RegexList
+    type: csv
+    default: |
+        Regex,Source
+        MSSE-[0-9a-f]{3}-server,Default Cobalt Strike Artifact Kit binaries
+        status_[0-9a-f]{2},Default psexec_psh
+        postex_ssh_[0-9a-f]{4},Default SSH beacon
+        msagent_[0-9a-f]{2},Default SMB beacon
+        postex_[0-9a-f]{4},Default Post Exploitation job (v4.2+)
+        mojo\.5688\.8052\.183894939787088877[0-9a-f]{2},jquery-c2.4.2.profile
+        mojo\.5688\.8052\.35780273329370473[0-9a-f]{2},jquery-c2.4.2.profile
+        mojo\.5688\.8052\.(?:183894939787088877|35780273329370473)[0-9a-f]{2}, Sigma HQ
+        wkssvc[0-9a-f]{2},jquery-c2.4.2.profile
+        wkssvc_?[0-9a-f]{2}, Sigma HQ
+        ntsvcs[0-9a-f]{2},trick_ryuk.profile
+        ntsvcs,multiple profiles
+        DserNamePipe[0-9a-f]{2},trick_ryuk.profile
+        SearchTextHarvester[0-9a-f]{2},trick_ryuk.profile
+        ntsvcs,zloader.profile
+        scerpc,zloader.profile
+        mypipe-f[0-9a-f]{2},havex.profile
+        mypipe-h[0-9a-f]{2},havex.profile
+        mypipe-(?:f|h)[0-9a-f]{2}, Sigma HQ
+        windows\.update\.manager[0-9a-f]{2},windows-updates.profile
+        windows\.update\.manager[0-9a-f]{3},windows-updates.profile
+        ntsvcs_[0-9a-f]{2},salesforce_api.profile
+        scerpc_[0-9a-f]{2},salesforce_api.profile
+        scerpc_?[0-9a-f]{2}, Sigma HQ
+        scerpc[0-9a-f]{2},zoom.profile
+        ntsvcs[0-9a-f]{2},zoom.profile
+        ConnectNamedPipe,Embee_Research win_cobaltstrike_pipe_strings_nov_2023
+        CreateNamedPipeA,Embee_Research win_cobaltstrike_pipe_strings_nov_2023
+        TlsGetValue,Embee_Research win_cobaltstrike_pipe_strings_nov_2023
+        PGMessagePipe[0-9a-f]{2},Sigma HQ
+        MsFteWds[0-9a-f]{2},Sigma HQ
+        f4c3[0-9a-f]{2},Sigma HQ
+        fullduplex_[0-9a-f]{2},Sigma HQ
+        msrpc_[0-9a-f]{4},Sigma HQ
+        win\\msrpc_[0-9a-f]{2},Sigma HQ
+        win_svc,bing.profile
+        f53f[0-9a-f]{2},Sigma HQ
+        rpc_[0-9a-f]{2},Sigma HQ
+        spoolss_[0-9a-f]{2},Sigma HQ
+        Winsock2\\CatalogChangeListener-[0-9a-f]{3}-0,Sigma HQ
+        PGMessagePipe,SOCFortress
+        MsFteWds,SOCFortress
+        demoagent_11,lee-malleable-skeleton.profile
+        demoagent_22,lee-malleable-skeleton.profile
+        windows\\\\pipe\_,jquery-c2.4.2.profile
+
+sources:
+  - precondition:
+      SELECT OS From info() where OS = 'windows'
+
+    query: |
+        LET processes = SELECT Pid, Name, Exe
+        FROM pslist()
+        WHERE Pid > 0
+        AND Name =~ ProcessRegex
+        AND format(format="%d", args=Pid) =~ PidRegex
+        
+        
+        SELECT * FROM foreach(
+        row=processes,
+        query={
+            SELECT * FROM foreach(
+                row=RegexList,
+                query={
+                    SELECT Pid, Name, Exe, Type, Name, Handle, Regex, Source
+                    FROM handles(pid=Pid)
+                    WHERE Name =~ Regex
+                }
+            )
+        })
