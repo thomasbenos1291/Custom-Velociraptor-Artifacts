@@ -1,0 +1,72 @@
+name: Server.Windows.Scan.CobaltStrikeParserMaster
+description: |
+
+  This artifact deploys CobaltStrikeParser-master in order to scan PEs, memory dumps or urls for Cobalt Strike beacons and parse their configuration.
+  
+  The tool must be first uploaded and installed properly on a directory on the server.
+  
+  You can use it as enrichment for uploaded files to server, or for urls.
+
+type: SERVER 
+  
+reference:
+    - https://github.com/Sentinel-One/CobaltStrikeParser
+
+author: Thomas Benos @thomasbenos1291
+
+tools:
+  - name: CobaltStrikeParserMaster
+    url: https://github.com/Sentinel-One/CobaltStrikeParser/archive/refs/heads/master.zip
+    
+precondition: 
+  SELECT OS From info() where OS = 'windows'
+  
+parameters:
+  - name: PythonExe
+    type: string
+    description: The python binary absolute path
+    default: 'C:\Users\Administrator\AppData\Local\Programs\Python\Python312\python.exe'
+  - name: ToolDirectory
+    default: 'C:\Program Files\Velociraptor\Tools\CobaltStrikeParser-master'
+    description: The directory of the tool on the server
+  - name: Ioc
+    type: string
+    description: The IOC to be scanned (filepath or url, starting with http)
+  - name: Command
+    type: hidden
+    default: |
+        # Read the contents of the text file
+        $fileContent = Get-Content -Path "C:\Windows\Temp\cobaltconfig.txt"
+    
+        # Create an empty array to store objects
+        $objects = @()
+    
+        # Iterate over each line in the file content
+        foreach ($line in $fileContent) {
+            # Split the line into key and value
+            $key, $value = $line -split "\s+-\s+"
+            
+            # Add a new object to the array
+            $objects += [PSCustomObject]@{
+                Key = $key.Trim()
+                Value = $value.Trim()
+            }
+        }
+        
+        # Export the array of objects to CSV
+        $objects | Export-Csv -Path "C:\Windows\Temp\cobaltconfig.csv" -NoTypeInformation
+
+    
+sources:
+  - query: |
+        -- Execute the tool
+         LET ExecParser <= SELECT * FROM execve(argv=["powershell", "/c", PythonExe,
+                        "parse_beacon_config\.py", Ioc, "|", "Tee-Object", "-FilePath", "'C:\\Windows\\Temp\\cobaltconfig.txt'"], cwd=ToolDirectory)
+                        WHERE log(message=Stdout) or log(message=Stderr) 
+                        
+         LET ParseTheTxt <= SELECT * FROM execve(argv=["powershell",
+            "-ExecutionPolicy", "Unrestricted", "-encodedCommand",
+            base64encode(string=utf16_encode(string=Command))
+          ]) WHERE log(message=Stdout) or log(message=Stderr)
+          
+          SELECT * FROM parse_csv(filename="C:\\Windows\\Temp\\cobaltconfig.csv")
