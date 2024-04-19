@@ -1,4 +1,5 @@
 name: Server.Enrichment.AbuseIPDB
+author: Thomas Benos @thomasbenos1291
 description: |
      Query AbuseIPDB for an indicator.
 
