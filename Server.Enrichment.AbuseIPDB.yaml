@@ -1,0 +1,59 @@
+name: Server.Enrichment.AbuseIPDB
+description: |
+     Query AbuseIPDB for an indicator.
+
+     To learn more about ThreatFox, see: https://www.abuseipdb.com
+
+     This artifact can be called from within another artifact to enrich the data made available by that artifact.
+
+     Ex.
+
+       `SELECT * from Artifact.Server.Enrichment.AbuseIPDB(IP=$YOURIP)`
+
+type: SERVER
+
+parameters:
+   - name: ipAddress
+     default:
+     description: The IP address to query for.
+   - name: MaxAgeInDays
+     default: 90
+   - name: APIKey
+     description: The AbuseIPDB APIKey is required to make the request.
+
+sources:
+    - query: |
+       
+       LET URL <= 
+            "https://api.abuseipdb.com/api/v2/check"
+       
+       LET request = 
+         SELECT Content
+           FROM http_client(
+             method="GET",
+             url=TFURL,
+             params=dict(
+             `ipAddress`=ipAddress,
+             `maxAgeInDays`=MaxAgeInDays),
+             headers=dict(
+             `Key`=APIKey,
+             `Accept`="application/json")
+       )
+       
+       
+       SELECT 
+              parse_json(data=Content).data.ipAddress AS `ipAddress`,
+              parse_json(data=Content).data.isPublic AS `isPublic`,
+              parse_json(data=Content).data.ipVersion AS `ipVersion`,
+              parse_json(data=Content).data.isWhitelisted AS `isWhitelisted`,
+              parse_json(data=Content).data.abuseConfidenceScore AS `abuseConfidenceScore`,
+              parse_json(data=Content).data.countryCode AS `countryCode`,
+              parse_json(data=Content).data.usageType AS `usageType`,
+              parse_json(data=Content).data.isp AS `isp`,
+              parse_json(data=Content).data.domain As `domain`,
+              parse_json(data=Content).data.hostnames As `hostnames`,
+              parse_json(data=Content).data.isTor As `isTor`,
+              parse_json(data=Content).data.totalReports As `totalReports`,
+              parse_json(data=Content).data.numDistinctUsers As `numDistinctUsers`,
+              parse_json(data=Content).data.lastReportedAt As `lastReportedAt`
+       FROM request
