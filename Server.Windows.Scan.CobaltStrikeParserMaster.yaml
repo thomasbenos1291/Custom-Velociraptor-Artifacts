@@ -35,38 +35,65 @@ parameters:
   - name: Command
     type: hidden
     default: |
-        # Read the contents of the text file
-        $fileContent = Get-Content -Path "C:\Windows\Temp\cobaltconfig.txt"
-    
-        # Create an empty array to store objects
-        $objects = @()
-    
+        # Read the content of the text file
+        $fileContent = Get-Content -Path "C:\Windows\Temp\file.txt"
+        
+        # Create an empty ordered hashtable to store key-value pairs
+        $hashTable = [ordered]@{}
+        
+        # Initialize a variable to store the previous key
+        $prevKey = ""
+        
         # Iterate over each line in the file content
         foreach ($line in $fileContent) {
             # Split the line into key and value
             $key, $value = $line -split "\s+-\s+"
             
-            # Add a new object to the array
-            $objects += [PSCustomObject]@{
-                Key = $key.Trim()
-                Value = $value.Trim()
+            # Trim leading and trailing spaces from key and value
+            $key = $key.Trim()
+            $value = $value.Trim()
+        
+            # Check if there is no value
+            if (-not $value) {
+                # Append the current key to the previous key's value
+                $hashTable[$prevKey] += " $key"
+            } else {
+                # Add key-value pair to the ordered hashtable
+                $hashTable[$key] = $value
+                # Store the current key as the previous key
+                $prevKey = $key
             }
         }
         
-        # Export the array of objects to CSV
-        $objects | Export-Csv -Path "C:\Windows\Temp\cobaltconfig.csv" -NoTypeInformation
+        # Convert the ordered hashtable to JSON format
+        $jsonContent = $hashTable | ConvertTo-Json
+        
+        # Save the JSON content to a file
+        $jsonContent | Out-File -FilePath "C:\Windows\Temp\cobaltconfig.json"
+
 
     
 sources:
   - query: |
         -- Execute the tool
-         LET ExecParser <= SELECT * FROM execve(argv=["powershell", "/c", PythonExe,
-                        "parse_beacon_config\.py", Ioc, "|", "Tee-Object", "-FilePath", "'C:\\Windows\\Temp\\cobaltconfig.txt'"], cwd=ToolDirectory)
+         LET Exec <= 
+         SELECT * FROM execve(argv=["powershell", "/c", PythonExe,
+                        "parse_beacon_config\.py", Ioc, 
+                        "|", "Tee-Object", "-FilePath", "C:\\Windows\\Temp\\file.txt"
+                        ], 
+                        cwd=ToolDirectory
+                        --, sep="|"
+                        )
                         WHERE log(message=Stdout) or log(message=Stderr) 
-                        
+         
+                   
          LET ParseTheTxt <= SELECT * FROM execve(argv=["powershell",
             "-ExecutionPolicy", "Unrestricted", "-encodedCommand",
             base64encode(string=utf16_encode(string=Command))
           ]) WHERE log(message=Stdout) or log(message=Stderr)
+            
           
-          SELECT * FROM parse_csv(filename="C:\\Windows\\Temp\\cobaltconfig.csv")
+          LET config <= SELECT Stdout FROM execve(argv=["powershell", "/c", "type", "C:\\Windows\\Temp\\cobaltconfig.json"])
+          WHERE log(message=Stdout) or log(message=Stderr)
+          
+          SELECT Ioc, parse_json(data=config[0].Stdout) as CobaltStrikeConfig FROM scope()
