@@ -3,40 +3,41 @@ description: |
 
   This artifact deploys CobaltStrikeParser-master in order to scan PEs, memory dumps or urls for Cobalt Strike beacons and parse their configuration.
   
-  The tool must be first uploaded and installed properly on a directory on the server.
+  Python and the tool must be first uploaded and installed properly on a directory on the server.
   
   You can use it as enrichment for uploaded files to server, or for urls.
+  
+  Example: 
+    SELECT *, {SELECT CobaltStrikeConfig 
+    FROM Artifact.Server.Windows.Scan.CobaltStrikeParserMaster(Ioc="https://"+DestIp+":"+DestPort)} as CobaltConfig
+    FROM Artifact.Windows.Network.NetstatEnriched()
 
 type: SERVER 
-  
+
+precondition: 
+        SELECT OS From info() where OS = 'windows'
+        
 reference:
     - https://github.com/Sentinel-One/CobaltStrikeParser
 
 author: Thomas Benos @thomasbenos1291
 
-tools:
-  - name: CobaltStrikeParserMaster
-    url: https://github.com/Sentinel-One/CobaltStrikeParser/archive/refs/heads/master.zip
-    
-precondition: 
-  SELECT OS From info() where OS = 'windows'
-  
 parameters:
-  - name: PythonExe
+  - name: PythonExeWindows
     type: string
-    description: The python binary absolute path
+    description: The python binary absolute path for the Windows Velociraptor Server
     default: 'C:\Users\Administrator\AppData\Local\Programs\Python\Python312\python.exe'
-  - name: ToolDirectory
+  - name: ToolDirectoryWindows
     default: 'C:\Program Files\Velociraptor\Tools\CobaltStrikeParser-master'
     description: The directory of the tool on the server
   - name: Ioc
     type: string
     description: The IOC to be scanned (filepath or url, starting with http)
-  - name: Command
+  - name: PowershellCommand
     type: hidden
     default: |
         # Read the content of the text file
-        $fileContent = Get-Content -Path "C:\Windows\Temp\file.txt"
+        $fileContent = Get-Content -Path "C:\Windows\Temp\cobaltconfig.txt"
         
         # Create an empty ordered hashtable to store key-value pairs
         $hashTable = [ordered]@{}
@@ -70,18 +71,15 @@ parameters:
         
         # Save the JSON content to a file
         $jsonContent | Out-File -FilePath "C:\Windows\Temp\cobaltconfig.json"
-
-
-    
 sources:
   - query: |
         -- Execute the tool
          LET Exec <= 
-         SELECT * FROM execve(argv=["powershell", "/c", PythonExe,
+         SELECT * FROM execve(argv=["powershell", "/c", PythonExeWindows,
                         "parse_beacon_config\.py", Ioc, 
-                        "|", "Tee-Object", "-FilePath", "C:\\Windows\\Temp\\file.txt"
+                        "|", "Tee-Object", "-FilePath", "C:\\Windows\\Temp\\cobaltconfig.txt"
                         ], 
-                        cwd=ToolDirectory
+                        cwd=ToolDirectoryWindows
                         --, sep="|"
                         )
                         WHERE log(message=Stdout) or log(message=Stderr) 
@@ -89,7 +87,7 @@ sources:
                    
          LET ParseTheTxt <= SELECT * FROM execve(argv=["powershell",
             "-ExecutionPolicy", "Unrestricted", "-encodedCommand",
-            base64encode(string=utf16_encode(string=Command))
+            base64encode(string=utf16_encode(string=PowershellCommand))
           ]) WHERE log(message=Stdout) or log(message=Stderr)
             
           
