@@ -1,0 +1,43 @@
+name: Server.Linux.Scan.CobaltStrikeParserMaster
+description: |
+
+  This artifact deploys CobaltStrikeParser-master in order to scan PEs, memory dumps or urls for Cobalt Strike beacons and parse their configuration.
+  
+  The tool must be first uploaded and installed properly on a directory on the server.
+  
+  You can use it as enrichment for uploaded files to server, or for urls.
+
+type: SERVER 
+  
+reference:
+    - https://github.com/Sentinel-One/CobaltStrikeParser
+
+author: Thomas Benos @thomasbenos1291
+precondition:
+    SELECT OS From info() where OS = 'linux'
+  
+parameters:
+  - name: LinuxPython
+    type: string
+    description: Python2 or Python3
+    default: "python3"
+  - name: ToolDirectoryLinux
+    default: '/var/tmp/velociraptor/tools/master/CobaltStrikeParser-master'
+    description: The directory of the tool on the server    
+  - name: Ioc
+    type: string
+    description: The IOC to be scanned (filepath or url, starting with http)
+  - name: BashCommand
+    type: hidden
+    default: |
+        awk -F ' - ' 'BEGIN {print "Attribute,Value"} {gsub(/ +/, " ", $2); if ($2 == "") {value = value $1} else {if (value != "") print attribute "," value; attribute = $1; value = $2}} END {if (value != "") print attribute "," value}' /tmp/cobaltconfig.txt > /tmp/cobaltconfig.csv
+
+sources:
+  - query: |
+        -- Build the command
+         LET PythonCommand = LinuxPython+" "+ToolDirectoryLinux+"/parse_beacon_config\.py "+Ioc+" | tee /tmp/cobaltconfig.txt"
+         
+         LET ExecLinux <= SELECT * FROM Artifact.Linux.Sys.BashShell(Command=PythonCommand)
+         LET ExecParser <= SELECT * FROM Artifact.Linux.Sys.BashShell(Command=BashCommand)
+         LET config = SELECT * FROM parse_csv(filename="/tmp/cobaltconfig.csv")
+         SELECT Ioc, to_dict(item={SELECT Attribute as _key, Value as _value FROM config}) as CobaltStrikeConfig FROM scope()
