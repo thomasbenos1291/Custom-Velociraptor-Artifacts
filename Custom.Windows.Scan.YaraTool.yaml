@@ -3,7 +3,7 @@ description: |
 
   This artifact deploys the classic Yara scanner.
     
-author: Thomas Benos
+author: Thomas Benos, @thomasbenos1291
 
 tools:
   - name: yara64
