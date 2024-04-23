@@ -8,6 +8,11 @@ description: |
   we recommend you review the config file and override it in the GUI
   with one that better suits your needs.
 
+  This artifact is modified so that you include the old Sysmon binary in order to uninstall current Sysmon version,
+  copies the files into C:\Windows and installs sysmon, provided the new sysmon binary or configuration are different.
+
+author: Thomas Benos, @thomasbenos1291
+
 tools:
   - name: SysmonBinary
     serve_locally: true
@@ -28,9 +33,6 @@ required_permissions:
 
 sources:
 - query: |
-    //- name: SysmonOldVersion
-    //url: \\udc1.ucd.soc\SYSVOL\ucd.soc\Sysmon\Sysmon64.exe
-    //serve_locally: true
     
     LET sysmon_binary = SELECT * FROM Artifact.Generic.Utils.FetchBinary(ToolName="SysmonBinary")
     
@@ -57,29 +59,9 @@ sources:
     WHERE Name =~ "Sysmon64" 
     AND State = "Running"
  
-    //LET if_running = SELECT val FROM if(
-    //condition=service_status,
-    //then={
-    // SELECT 1 AS val from scope()
-    //},
-    //else={
-    //SELECT 0 AS val from scope()
-    //}
-    //)
     
-    LET ensure_service_running = //SELECT * FROM chain (
-       //a={
-       
-        SELECT * FROM execve(argv=["sc.exe", "start", "sysmon64"])
+    LET ensure_service_running = SELECT * FROM execve(argv=["sc.exe", "start", "sysmon64"])
            
-      // },
-       
-       //b={
-       
-        //SELECT * FROM Artifact.Custom.Windows.System.PowerShell.SysmonConfigView
-
-      // }
-    //)
     
     LET change_hash_message=log(message="Sysmon config hash has changed (%v vs %v) - reinstalling",
                     args=[existing_hash[0].Hash, Tool_SysmonConfig_HASH])
@@ -95,13 +77,9 @@ sources:
     a={SELECT * FROM change_hash_message},
     b={
        // First force an uninstall to clear the previous config
-       //SELECT * FROM execve(argv= [ bin[0].FullPath, "-u"], length=10000000)
        SELECT * FROM execve(argv= [sysmon_old[0].FullPath, "-u"], length=10000000) 
     },
     c={
-       //SELECT * FROM execve(argv=["cmd.exe", "/c", "copy.exe", "E:\\TEMP\\sysmonconfig.xml", "C:\\Sysmon\\"], length=10000000)
-       //SELECT * FROM execve(argv=["C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "-ExecutionPolicy", "Unrestricted", 
-       //"-Command", "Copy-Item", sysmon_config[0].FullPath, "C:\\Sysmon"], length=10000000)
        SELECT copy(filename=sysmon_config[0].FullPath, accessor="ntfs", dest="C:/Windows/sysmonconfig.xml") FROM scope()
     }, 
     d={
@@ -119,43 +97,6 @@ sources:
 
     // Only install sysmon if the existing config hash is not the same
     // as the specified hash.
-    
-    //LET sysmon_service = SELECT * FROM Artifact.Custom.Windows.System.Services.Sysmon
-    //    
-    //
-    
-    //LET compare_hash = SELECT check FROM if(
-     //      condition=existing_hash[0].Hash != Tool_SysmonConfig_HASH,
-     //      then={
-     //           SELECT * FROM chain(
-     //           a={log(message="Sysmon config hash has changed (%v vs %v) - reinstalling",
-     //               args=[existing_hash[0].Hash, Tool_SysmonConfig_HASH]},
-     //           b={SELECT 1 as check FROM scope()}
-     //           },
-     //      else={
-      //          SELECT * FROM chain(
-     //           a={log(message="Existing sysmon config hash has not changed (%v) - skipping reinstall",
-      //              args=Tool_SysmonConfig_HASH},
-      //          b={SELECT 0 as check FROM scope()}
-      //          }
-      //    )
-    //condition=if(
-        //condition=sysmon_binary AND sysmon_config AND eula AND sysmon_old,
-        //else=log(message="Failed to fetch sysmon tools!")
-        //,
-        //then=if(
-        //Check if Sysmon is ensure_service_running
-        //  
-        
-        //   condition=existing_hash[0].Hash != Tool_SysmonConfig_HASH,
-        //   then=log(message="Sysmon config hash has changed (%v vs %v) - reinstalling",
-        //            args=[existing_hash[0].Hash, Tool_SysmonConfig_HASH]),
-        //   else=log(message="Existing sysmon config hash has not changed (%v) - skipping reinstall",
-        //            args=Tool_SysmonConfig_HASH) AND FALSE
-        //  )
-        //),
-    //then={ SELECT * FROM doit },
-    //else={ SELECT * FROM ensure_service_running })
 
     SELECT * FROM if(
     //Check if all tools are successfully fetched
@@ -174,8 +115,7 @@ sources:
              else={
              //If configuration has not changed, skip reinstall
                 SELECT * FROM not_changed_hash_message
-                //SELECT * FROM sysmon_is_running
-        
+
                 }
              )
         },
