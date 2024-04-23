@@ -1,7 +1,7 @@
 name: Custom.Artifact.Windows.Search.AlienVault
-author: Thomas Benos
+author: Thomas Benos @thomasbenos1291.
 description: |
-   Download a .csv file from AlienVault and hunt the endpoint. 
+   Downloads a .csv file from AlienVault and hunts the endpoint. 
    You have to provide the .csv download url or a custom csv file with IOCs.
    Strongly recommended to do the file search and the event log search in different hunts as to not take too long.
 
