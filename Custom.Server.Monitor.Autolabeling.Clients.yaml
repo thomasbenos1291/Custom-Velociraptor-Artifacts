@@ -6,7 +6,8 @@ description: |
     This server side event monitoring artifact watches for new client enrollments and automatically labels them according to their domain roles.
     It checks for already set labels, which deletes, and assign automatically Domain Role, Username, IP Address and Domain labels.
     
-    Relabeling of all clients even after they were enrolled can be achieved by starting a hunt for `Custom.Generic.Client.Info`. The labels are either Set or Cleared so it is fine to re-apply the label many times.
+    Relabeling of all clients even after they were enrolled can be achieved by starting a hunt for `Custom.Generic.Client.Info`. 
+    The labels are either Set or Cleared so it is fine to re-apply the label many times.
     
 type: SERVER_EVENT
 sources:
