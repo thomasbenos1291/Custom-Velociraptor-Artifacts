@@ -1,6 +1,10 @@
 name: Custom.Windows.System.Pslist
 description: |
   List processes and their running binaries.
+  
+  Edited artifact to also get child processes.
+
+author: Thomas Benos, @thomasbenos1291
 
 parameters:
   - name: ProcessRegex
@@ -31,37 +35,16 @@ sources:
     query: |
         LET ProcList = 
         SELECT * FROM pslist()
-        --SELECT * FROM if(condition=UseTracker,
-        --then={
-          --SELECT Pid, Ppid, NULL AS TokenIsElevated,
-          --       Username, Name, CommandLine, Exe, NULL AS Memory,
-          --       join(array=process_tracker_callchain(id=Pid).Data.Name, sep="->") AS CallChain,
-           --      process_tracker_tree(id=Pid) AS PSTree
-          --FROM process_tracker_pslist()
-        --}, else={
-          
-        --})
         
         LET network_conn(process_id) = SELECT * FROM Artifact.Windows.Network.Netstat() WHERE Pid = process_id
         
         LET parent_process_calc(parent_id) = SELECT Exe FROM process_tracker_pslist(pid=parent_id)
-        //SELECT CommandLine FROM ProcList WHERE Pid=ppid
         
-        --LET processes = 
         SELECT Pid, CommandLine, Exe, Username, Ppid, TokenIsElevated, Name, 
             parent_process_calc(parent_id=Ppid)[0].Exe as ParentProcess,
             join(array=process_tracker_callchain(id=Pid).Data.Name, sep="->") as ProcessTree,
             process_tracker_tree(id=Pid).children as ChildProcesses,
             process_tracker_tree(id=Pid).data.StartTime as StartTime,
-            //process_tracker_tree(id=Pid).data as ProcessTree,
-            --network_connections(process_id=Pid)[0].TypeString AS Type,
-            --network_connections(process_id=Pid)[0].Status AS Status,
-            --network_connections(process_id=Pid)[0].LocalAddress AS LocalIP,
-            --network_connections(process_id=Pid)[0].LocalPort AS LocalPort,
-            --network_connections(process_id=Pid)[0].RemoteAddress AS RemoteIP, 
-            --network_connections(process_id=Pid)[0].RemotePort AS RemotePort,
-            --network_connections(process_id=Pid)[0].Timestamp AS Timestamp,
-            //token(pid=Pid) as TokenInfo,
             hash(path=Exe).SHA256 as SHA256,
             authenticode(filename=Exe).Trusted AS Trusted, Memory.WorkingSetSize AS WorkingSetSize
         FROM ProcList
@@ -73,12 +56,3 @@ sources:
             AND NOT if(condition= UntrustedAuthenticode,
                         then= Authenticode.Trusted = 'trusted' OR NOT Exe,
                         else= False )
-                        
-        --LET network_conn(process_id) = SELECT * FROM Artifact.Windows.Network.Netstat() WHERE Pid = process_id
-        --SELECT * FROM network_conn(process_id=3736)
-        
-        --SELECT * FROM foreach(
-        --row={SELECT Pid FROM processes},
-        --query={SELECT *, {SELECT Family, Type, Status, `Laddr.IP`, `Laddr.Port`, `Raddr.IP`, `Raddr.Port`, `Timestamp` FROM network_conn(process_id=Pid)} as ActiveConnections 
-        --FROM processes}
-        --)
