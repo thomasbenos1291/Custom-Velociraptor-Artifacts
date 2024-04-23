@@ -1,5 +1,5 @@
 name: Windows.Detection.Hollowfind
-author: Thomas Benos
+author: Thomas Benos @thomasbenos1291
 description: |
     This artifact checks for hollow processes with the following methology:
     
