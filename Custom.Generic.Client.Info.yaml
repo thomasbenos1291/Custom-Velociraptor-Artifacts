@@ -153,39 +153,6 @@ sources:
         else={SELECT * FROM Artifact.Linux.Network.NetstatEnriched()}
         )
         
-        -- name: Listening_Ports
-        --precondition: SELECT OS From info() where OS = 'windows'
-        --query: |
-        --SELECT * FROM Artifact.Windows.Network.ListeningPorts()
-        
-        -- name: Services
-        --precondition: SELECT OS From info() where OS = 'windows'
-        --query: |
-        --SELECT
-        --State,
-        --Name,
-        --DisplayName,
-        --Status,
-        --Pid,
-        --ExitCode,
-        --StartMode,
-        --PathName as Command,
-        --AbsoluteExePath as AbsolutePath,
-        --ServiceType,
-        --UserAccount,
-        --Created,
-        --FailureCommand,
-        --FailureActions,
-        --HashServiceExe.SHA256 as ServiceSHA256,
-        --CertinfoServiceExe.Trusted as ServiceTrusted,
-        --ServiceDll,
-        --HashServiceDll.SHA256 as DllSHA256,
-        --CertinfoServiceDll as ServiceTrusted
-        //State, Name, DisplayName, Status, Pid, StartMode,
-        //PathName, ServiceType, UserAccount, Created,
-        //ServiceDll, FailureCommand, 
-        --FROM Artifact.Windows.System.Services()
-        
 reports:
   - type: CLIENT
     template: |
