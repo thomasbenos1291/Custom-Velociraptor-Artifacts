@@ -5,11 +5,11 @@ description: |
   Based on the artifact developed by Eduardo Mattos - @eduardfir
   and Xavier Mertens @xme.
   
-  You have to include the signature-base folder inside the loki.zip\loki folder.
+  You have to include the signature-base folder inside the loki.zip\loki folder and rename the executable to "loki.exe".
     
   NOTE: This artifact usually transfers a lot of data. You should increase the default timeout to allow it to complete.
     
-author: Thomas Benos
+author: Thomas Benos @thomasbenos1291
 
 reference: 
     - https://github.com/Neo23x0/signature-base
