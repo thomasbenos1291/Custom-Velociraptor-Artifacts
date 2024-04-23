@@ -33,15 +33,12 @@ to parse a url, ip address with port or a file which is uploaded on the server.
 ### Windows.Detection.Hollowfind
 This artifact checks for hollow processes with the following methology:
     
-    1.	Creates a list of processes using pslist plugin
-    2.  For each process, it retrieves information from the process structure, PEB and
-    the VAD that is pointed by PEB.ImageBaseAddress and checks whether there is
-    an executable in the processes’ s VADs
-    3. Detects whether the process is hollowed. The criteria used are:
-        ▪ VAD’s Protection equals to PAGE_EXECUTE_READWRITE or
-        ▪ There is no VAD entry corresponding to PEB.ImageBaseAddress
-        ▪ There is an executable in processes’ VADs that PEB.ImageBaseAddress
-        does not point to and has PAGE_EXECUTE_WRITECOPY protection
+1.Creates a list of processes using pslist plugin
+2.For each process, it retrieves information from the process structure, PEB and the VAD that is pointed by PEB.ImageBaseAddress and checks whether there is an executable in the processes’ s VADs.
+3.Detects whether the process is hollowed. The criteria used are:
+    ▪ VAD’s Protection equals to PAGE_EXECUTE_READWRITE or
+    ▪ There is no VAD entry corresponding to PEB.ImageBaseAddress or
+    ▪ There is an executable in processes’ VADs that PEB.ImageBaseAddress does not point to and has PAGE_EXECUTE_WRITECOPY protection.
 
 ### Custom.Windows.Scan.CrowdResponse
 This artifact deploys CrowdResponse for yara scanning. The configuration file must either be uploaded or entered in the appropriate field.
