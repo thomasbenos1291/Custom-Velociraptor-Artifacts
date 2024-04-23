@@ -7,10 +7,11 @@ description: |
   
   You can use it as enrichment for uploaded files to server, or for urls.
   
-  Example: 
-    SELECT *, {SELECT CobaltStrikeConfig 
-    FROM Artifact.Server.Windows.Scan.CobaltStrikeParserMaster(Ioc="https://"+DestIp+":"+DestPort)} as CobaltConfig
-    FROM Artifact.Windows.Network.NetstatEnriched()
+  Example usage:
+  
+  SELECT *, 
+  {SELECT * FROM Artifact.Server.Linux.Scan.CobaltStrikeParserMaster(Ioc=str(str=DestIP), IsIP=TRUE, Port=str(str=DestPort)} as CobaltConfig
+  FROM source(artifact="Windows.Network.NetstatEnriched")
 
 type: SERVER 
 
@@ -73,6 +74,13 @@ parameters:
         $jsonContent | Out-File -FilePath "C:\Windows\Temp\cobaltconfig.json"
 sources:
   - query: |
+        -- Clear the last file
+         LET _ <= SELECT * FROM Artifact.Windows.Sys.CmdShell(Command="echo. > C:\Windows\Temp\cobaltconfig.txt")
+         WHERE log(message="Clearing last results txt")
+         
+         LET _ <= SELECT * FROM Artifact.Windows.Sys.CmdShell(Command="echo. > C:\Windows\Temp\cobaltconfig.json")
+         WHERE log(message="Clearing last results json")
+        
         -- Execute the tool
          LET Exec <= 
          SELECT * FROM execve(argv=["powershell", "/c", PythonExeWindows,
