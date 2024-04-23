@@ -1,9 +1,7 @@
 name: Custom.Windows.Scan.LokiEnriched
 description: |
 
-  This artifact deploys a Loki scanner and search for IOCs. Loki requires Internet connectivity to fetch the
-  latest IOCs and YARA rules.
-
+  This artifact deploys a Loki scanner and search for IOCs. 
   Based on the artifact developed by Eduardo Mattos - @eduardfir
   and Xavier Mertens @xme.
   
