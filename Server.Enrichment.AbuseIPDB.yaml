@@ -3,7 +3,7 @@ author: Thomas Benos @thomasbenos1291
 description: |
      Query AbuseIPDB for an ip address.
 
-     To learn more about ThreatFox, see: https://www.abuseipdb.com
+     To learn more about AbuseIPDB, see: https://www.abuseipdb.com
 
      This artifact can be called from within another artifact to enrich the data made available by that artifact.
 
