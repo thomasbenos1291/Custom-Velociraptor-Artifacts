@@ -24,6 +24,7 @@ parameters:
     type: regex
   - name: Hash256Regex
     default: .
+    type: regex
   - name: ReallyDoIt
     description: When selected will really remove!
     type: bool  
