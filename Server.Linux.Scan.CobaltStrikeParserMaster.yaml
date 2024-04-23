@@ -6,6 +6,12 @@ description: |
   The tool must be first uploaded and installed properly on a directory on the server.
   
   You can use it as enrichment for uploaded files to server, or for urls.
+  
+  Example usage:
+  
+  SELECT *, 
+  {SELECT * FROM Artifact.Server.Linux.Scan.CobaltStrikeParserMaster(Ioc=str(str=DestIP), IsIP=TRUE, Port=str(str=DestPort)} as CobaltConfig
+  FROM source(artifact="Windows.Network.NetstatEnriched")
 
 type: SERVER 
   
@@ -22,11 +28,17 @@ parameters:
     description: Python2 or Python3
     default: "python3"
   - name: ToolDirectoryLinux
-    default: '/var/tmp/velociraptor/tools/master/CobaltStrikeParser-master'
+    default: '/var/tmp/velociraptor/tools/CobaltStrikeParser-master'
     description: The directory of the tool on the server    
   - name: Ioc
     type: string
-    description: The IOC to be scanned (filepath or url, starting with http)
+    description: The IOC to be scanned (filepath or url, starting with http, or IP address)
+  - name: IsIP
+    type: bool
+    description: If it is a plain IP address (not url), then this must be checked in order for the https:// to be put on the front
+  - name: Port
+    type: string
+    description: If you target a specific port, enter it here.
   - name: BashCommand
     type: hidden
     default: |
@@ -34,10 +46,20 @@ parameters:
 
 sources:
   - query: |
-        -- Build the command
-         LET PythonCommand = LinuxPython+" "+ToolDirectoryLinux+"/parse_beacon_config\.py "+Ioc+" | tee /tmp/cobaltconfig.txt"
+        -- Clear the last file
+         LET _ <= SELECT * FROM Artifact.Linux.Sys.BashShell(Command="truncate --size=0 /tmp/cobaltconfig.csv")
+         WHERE log(message="Clearing last results csv")
          
-         LET ExecLinux <= SELECT * FROM Artifact.Linux.Sys.BashShell(Command=PythonCommand)
-         LET ExecParser <= SELECT * FROM Artifact.Linux.Sys.BashShell(Command=BashCommand)
+         LET _ <= SELECT * FROM Artifact.Linux.Sys.BashShell(Command="truncate --size=0 /tmp/cobaltconfig.txt")
+         WHERE log(message="Clearing last results txt")
+        
+        -- Build the command
+         LET check_ip = if(condition=IsIP=TRUE, then="https://"+Ioc, else=Ioc)
+         LET ioc_string = if(condition=Port, then=check_ip+":"+Port, else=check_ip)
+         
+         LET PythonCommand = LinuxPython+" "+ToolDirectoryLinux+"/parse_beacon_config\.py "+ioc_string+" | tee /tmp/cobaltconfig.txt"
+         
+         LET ExecLinux <= SELECT * FROM Artifact.Linux.Sys.BashShell(Command=PythonCommand) WHERE log(message=Stdout) OR log(message=Stderr)
+         LET ExecParser <= SELECT * FROM Artifact.Linux.Sys.BashShell(Command=BashCommand) WHERE log(message=Stdout) OR log(message=Stderr)
          LET config = SELECT * FROM parse_csv(filename="/tmp/cobaltconfig.csv")
-         SELECT Ioc, to_dict(item={SELECT Attribute as _key, Value as _value FROM config}) as CobaltStrikeConfig FROM scope()
+         SELECT ioc_string, to_dict(item={SELECT Attribute as _key, Value as _value FROM config}) as CobaltStrikeConfig FROM scope()
