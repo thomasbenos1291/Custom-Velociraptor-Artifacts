@@ -10,7 +10,7 @@ description: |
   Example usage:
   
   SELECT *, 
-  {SELECT * FROM Artifact.Server.Linux.Scan.CobaltStrikeParserMaster(Ioc=str(str=DestIP), IsIP=TRUE, Port=str(str=DestPort)} as CobaltConfig
+  {SELECT * FROM Artifact.Server.Linux.Scan.CobaltStrikeParserMaster(Ioc=str(str=https://+DestIP+DestPort))} as CobaltConfig
   FROM source(artifact="Windows.Network.NetstatEnriched")
 
 type: SERVER 
