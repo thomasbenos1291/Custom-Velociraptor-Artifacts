@@ -1,0 +1,33 @@
+name: Windows.UploadAuditPolicy
+description: |
+  Upload Audit Policy to Windows
+
+precondition: SELECT OS From info() where OS = 'windows'
+
+required_permissions:
+- EXECVE
+
+parameters:
+  - name: AuditLocation
+    type: string
+    default: C:/Windows/audit.csv
+  - name: AuditPolicyFile
+    type: upload
+    description: The audit policy to upload
+sources:
+- query: |
+    LET audit_data <= AuditPolicyFile
+    --LET file <= tempfile(remove_last=TRUE, data=audit_data, extension=".csv")
+    LET copied <= SELECT copy(filename=audit_data, accessor="data", dest=AuditLocation) as file FROM scope()
+       
+    SELECT * FROM chain(
+        --Add locally the audit csv
+        a={
+            SELECT Stdout FROM execve(argv=["powershell", "-c", "AuditPol", "/restore", "/file:"+copied[0].file])
+            WHERE log(message=Stderr)
+        },
+        --Verify Applied Settings 
+        b={
+            SELECT * FROM Artifact.Windows.System.AuditPolicy()
+        }
+    )
