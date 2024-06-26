@@ -49,3 +49,6 @@ Upgraded VQL artifact of Loki Scanner. You have to include the signature-base fo
 ### Custom.Artifact.Windows.Search.AlienVault
 Downloads a .csv file from AlienVault and hunts the endpoint.
 Works with Custom.Windows.System.DNSCache in order to look effectively in the reversed ".in-addr.arpa" entries.
+
+### Windows.UploadAuditPolicy
+Uploads an Audit Policy in .csv format to a Windows endpoint.
