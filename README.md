@@ -52,3 +52,9 @@ Works with Custom.Windows.System.DNSCache in order to look effectively in the re
 
 ### Windows.UploadAuditPolicy
 Uploads an Audit Policy in .csv format to a Windows endpoint.
+
+### Custom.Server.RunCustomInfo
+Run client interrogation on clients and delete other interrogation flows.
+
+### Custom.Server.Monitoring.ScheduleCustomInfo
+Run client interrogation periodically with Custom.Server.RunCustomInfo in order to also remove previous interrogation data.
