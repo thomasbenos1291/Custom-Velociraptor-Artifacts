@@ -1,0 +1,24 @@
+name: Custom.Server.Monitoring.ScheduleCustomInfo
+description: |
+     Run client interrogation periodically. This is a sample event
+     artifact to schedule a hunt periodically. You can change it to
+     launch other artifacts.
+
+type: SERVER_EVENT
+
+parameters:
+  - name: Period
+    type: int
+    description: How often the interrogation runs in seconds.
+    default: 600
+
+sources:
+  - query: |
+        
+        LET schedule = SELECT
+           UTC.String AS Now
+        FROM clock(period=Period)
+        WHERE log(message="Launching at time " + Now)
+        
+        SELECT collect_client(client_id="server", artifacts="Custom.Server.RunCustomInfo") FROM schedule
+              
