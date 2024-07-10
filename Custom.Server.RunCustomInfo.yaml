@@ -1,0 +1,30 @@
+name: Custom.Server.RunCustomInfo
+author: Thomas Benos @thomasbenos1291
+description: |
+     Run client interrogation on clients and delete other interrogation flows.
+
+type: SERVER
+
+sources:
+  - query: |
+        LET ArtifactToExecute="Custom.Generic.Client.Info"
+
+        LET clients = SELECT client_id as ClientId, last_interrogate_flow_id as BeforeId FROM clients() 
+        
+        LET start_flow = SELECT * FROM foreach(
+        row=clients,
+        query={SELECT ClientId, BeforeId, collect_client(artifacts=ArtifactToExecute, client_id=ClientId).flow_id as NewFlowId FROM scope()},
+        async=TRUE
+        )
+
+        LET old_flows = SELECT * FROM foreach(
+        row=start_flow,
+        query={SELECT ClientId, BeforeId, NewFlowId, session_id, * FROM flows(client_id=ClientId) WHERE 
+        NOT session_id=NewFlowId AND NOT session_id=BeforeId AND
+        request.artifacts[0]=ArtifactToExecute}
+        )
+        
+        SELECT * FROM foreach(
+        row=old_flows,
+        query={SELECT ClientId, NewFlowId, session_id, Type as _Type, Data as _Data, Error as _Error FROM delete_flow(flow_id=session_id, client_id=ClientId, really_do_it=TRUE)}
+        )
