@@ -138,9 +138,20 @@ sources:
     query: |
         SELECT * FROM if(
         condition={SELECT OS From info() where OS = 'windows'},
-        then={SELECT *, 
-        {SELECT * from Artifact.Server.Enrichment.MalwareBazaar(Hash=SHA256)} as MalwareBazaar
-        FROM Artifact.Custom.Windows.System.Pslist()},
+        then={SELECT 
+        Pid,
+        Ppid,
+        TokenIsElevated,
+        Name,
+        CommandLine,
+        Exe,
+        TokenInfo as _TokenInfo,
+        Hash,
+        Authenticode,
+        Username,
+        WorkingSetSize as _WorkingSetSize,
+        {SELECT * from Artifact.Server.Enrichment.MalwareBazaar(Hash=Hash.SHA256)} as MalwareBazaar
+        FROM Artifact.Windows.System.Pslist()},
         else={SELECT * FROM Artifact.Linux.Sys.Pslist()})
 
   - name: Network_Connections
