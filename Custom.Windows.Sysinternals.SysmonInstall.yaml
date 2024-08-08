@@ -41,10 +41,11 @@ sources:
       SELECT * FROM glob(globs="C:/Windows/Sysmon64.exe")
     }, b=sysmon_binary)
     
-    LET existing_hash = SELECT lowcase(
-       string=parse_string_with_regex(
-          string=Stdout, regex="hash:.+SHA256=([^\\n\\r]+)").g1) AS Hash
-    FROM execve(argv=[bin[0].FullPath, "-c"])
+    LET existing_hash = 
+    SELECT lowcase(
+           string=parse_string_with_regex(
+              string=Stdout, regex="hash:.+SHA256=([^\\n\\r]+)").g1) AS Hash
+              FROM execve(argv=["powershell\.exe", "/c", bin[0].OSPath, "-c", "|", "findstr", "SHA256", "|", "findstr", "Config"])
     
     LET sysmon_old = SELECT * FROM Artifact.Generic.Utils.FetchBinary(ToolName="SysmonOldBinary")
 
