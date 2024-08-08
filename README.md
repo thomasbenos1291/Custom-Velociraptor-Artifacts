@@ -9,10 +9,6 @@ Search for any process handles that match known CobaltStrike named pipe patterns
 ### Custom.Windows.Scan.YaraTool
 This artifact deploys the classic Yara scanner and presents all files detected grouped by rule matched.
 
-### Custom.Windows.Sysinternals.SysmonInstall
-This artifact is modified so that you include the old Sysmon binary in order to uninstall current Sysmon version,
-copies the files into C:\Windows and installs sysmon, provided the new sysmon binary or configuration are different.
-
 ### Custom.Windows.System.Pslist
 A custom version updated to also show the child processes of each process.
 
