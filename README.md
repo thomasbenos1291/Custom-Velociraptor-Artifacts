@@ -58,3 +58,6 @@ Run client interrogation on clients and delete other interrogation flows.
 
 ### Custom.Server.Monitoring.ScheduleCustomInfo
 Run client interrogation periodically with Custom.Server.RunCustomInfo in order to also remove previous interrogation data.
+
+### Custom.Windows.EventLogs.ScriptBlockHunter
+Hunt for the Windows ScriptBlock event log 4104 and concatenate all events by ScriptBlock Id to produce the whole script.
