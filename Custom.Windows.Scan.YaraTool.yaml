@@ -7,8 +7,8 @@ author: Thomas Benos, @thomasbenos1291
 
 tools:
   - name: yara64
-    url: https://github.com/VirusTotal/yara/releases/download/v4.4.0/yara-4.4.0-rc1-2176-win64.zip
-
+    url: https://github.com/VirusTotal/yara/releases/download/v4.5.1/yara-master-2298-win64.zip
+    
 precondition: 
   SELECT OS From info() where OS = 'windows'
   
