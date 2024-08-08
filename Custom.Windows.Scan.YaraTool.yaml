@@ -64,38 +64,46 @@ parameters:
               uint16(0) == 0x5a4d and filesize < 3000KB and ( all of them )
         }
         
+        rule IsPE:TestRule { 
+            meta: 
+                author = "the internet" 
+                date = "2021-03-04" 
+                description = "A simple PE rule to test yara features" 
+            condition: 
+                uint16(0) == 0x5A4D and uint32(uint32(0x3C)) == 0x00004550 
+        }
+        
 sources:
   - query: |
         -- Scan the host
         LET Toolzip <= SELECT OSPath FROM Artifact.Generic.Utils.FetchBinary(ToolName="yara64", IsExecutable=FALSE)
         
-        LET TmpDir <= tempdir(remove_last=TRUE)
+        LET TmpDir <= tempdir()
         
         LET UnzipIt <= SELECT * FROM unzip(filename=Toolzip.OSPath, output_directory=TmpDir)
         
         LET yara_data <= YaraFile || YaraRule
         
-        LET yara_rule <= tempfile(remove_last=TRUE, data=yara_data, extension=".yar")
+        LET yara_rule <= tempfile(data=yara_data, extension=".yar")
         
-        LET ExecYara <= SELECT * FROM execve(argv=filter(list=[
-                        "cmd.exe", "/c", "cd", TmpDir, "&&",
-                        "yara64.exe",
-                        if(condition=Recurse, then="-r", else=""),
-                        "-m",
-                        yara_rule, Target, ">", "C:\\Windows\\Temp\\output.csv"], 
-                        regex="."))
+        LET outputfile = TmpDir+"\\output.csv"
 
-        -- Postprocessing CSV results
-        LET results = SELECT * FROM split_records(filenames="C:\\Windows\\Temp\\output.csv", accessor="auto", regex=" " , columns=['Rule', 'Metadata'], count=2)
+        LET exec <= SELECT Stdout FROM execve(argv=filter(list=[
+                                "cmd.exe", "/c",
+                                TmpDir+"\\yara64.exe",
+                                if(condition=Recurse, then="-r", else=""),
+                                "-m",
+                                yara_rule, Target, ">", outputfile
+                                ], 
+                                regex=".")) 
+                                WHERE log(message=Stdout)
         
+        LET results = SELECT * FROM split_records(filenames=outputfile, accessor="auto", regex=" " , columns=['Rule', 'Metadata'], count=2)
+                
         LET output = SELECT Rule, split(string=Metadata, sep_string=''']''')[0] as Metadata, 
-        split(string=Metadata, sep_string=''']''')[1] as File
-        FROM results
-
-        --LET files = SELECT File as TriggeredFile FROM output GROUP BY TriggeredFile
-
-        --SELECT TriggeredFile, {SELECT TriggeredRule FROM output WHERE File=TriggeredFile} as TriggeredRules FROM files
-        
+                split(string=Metadata, sep_string=''']''')[1] as File
+                FROM results
+                                
         LET rules = SELECT Rule as TriggeredRule, Metadata as RuleMetadata FROM output GROUP BY TriggeredRule
-        
+                
         SELECT TriggeredRule, RuleMetadata, {SELECT File FROM output WHERE Rule=TriggeredRule} as TriggeredFiles FROM rules
