@@ -1,10 +1,6 @@
 name: Custom.Windows.System.Pslist
 description: |
   List processes and their running binaries.
-  
-  Edited artifact to also get child processes.
-
-author: Thomas Benos, @thomasbenos1291
 
 parameters:
   - name: ProcessRegex
@@ -25,26 +21,25 @@ parameters:
   - name: UntrustedAuthenticode
     description: Show only Executables that are not trusted by Authenticode.
     type: bool
-  - name: UseTracker
-    type: bool
-    description: If set we use the process tracker.
 
 sources:
   - precondition: SELECT OS From info() where OS = 'windows'
     
     query: |
-        LET ProcList = 
-        SELECT * FROM pslist()
+        LET ProcList <= SELECT * FROM pslist()
         
-        LET network_conn(process_id) = SELECT * FROM Artifact.Windows.Network.Netstat() WHERE Pid = process_id
+        LET Conns <= SELECT * FROM Artifact.Windows.Network.Netstat()
         
-        LET parent_process_calc(parent_id) = SELECT Exe FROM process_tracker_pslist(pid=parent_id)
+        LET network_conn(process_id) = SELECT * FROM Conns WHERE Pid = process_id
         
-        SELECT Pid, CommandLine, Exe, Username, Ppid, TokenIsElevated, Name, 
-            parent_process_calc(parent_id=Ppid)[0].Exe as ParentProcess,
+        LET parent_process_calc(parent_id) = SELECT CommandLine FROM process_tracker_pslist(pid=parent_id)
+
+            SELECT Pid, CommandLine, Exe, Username, Ppid, TokenIsElevated, Name, 
+            if(condition=NOT Ppid=0, then=parent_process_calc(parent_id=Ppid)[0].CommandLine) as ParentCommandLine,
             join(array=process_tracker_callchain(id=Pid).Data.Name, sep="->") as ProcessTree,
             process_tracker_tree(id=Pid).children as ChildProcesses,
             process_tracker_tree(id=Pid).data.StartTime as StartTime,
+            network_conn(process_id=Pid) as NetworkConnections,
             hash(path=Exe).SHA256 as SHA256,
             authenticode(filename=Exe).Trusted AS Trusted, Memory.WorkingSetSize AS WorkingSetSize
         FROM ProcList
