@@ -1,0 +1,33 @@
+name: Custom.Server.Monitoring.ScheduleAllFlowDeletion
+description: |
+     Delete all flows periodically to save space in the datastore.
+
+type: SERVER_EVENT
+
+parameters:
+  - name: TimeBefore
+    description: The number of seconds which will be substracted from the current time in order to delete historical flows (time ago to delete). Default is two weeks.
+    type: int
+    default: 1209600
+  - name: Period
+    type: int
+    description: How often the deletion runs in seconds. Default is two weeks.
+    default: 1209600
+
+sources:
+  - query: |
+        
+        LET schedule = SELECT
+           UTC.String AS Now
+        FROM clock(period=Period)
+        WHERE log(message="Launching at time " + Now)
+        
+        LET DateBefore = timestamp(epoch=(now()-TimeBefore))
+        
+        SELECT collect_client(client_id="server", artifacts=["Server.Utils.DeleteManyFlows","Server.Utils.DeleteMonitoringData"],
+        spec=dict(
+            `Server.Utils.DeleteManyFlows`=dict(ArtifactRegex=".",CreatorRegex=".",DateBefore=DateBefore, ReallyDoIt=TRUE),
+            `Server.Utils.DeleteMonitoringData`=dict(ArtifactRegex=".",DateBefore=DateBefore, ReallyDoIt=TRUE)
+        )
+        ) FROM schedule
+              
