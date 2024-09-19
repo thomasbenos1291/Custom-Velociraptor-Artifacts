@@ -21,27 +21,44 @@ parameters:
   - name: UntrustedAuthenticode
     description: Show only Executables that are not trusted by Authenticode.
     type: bool
+  - name: UseTracker
+    type: bool
+    description: If set we use the process tracker.
+  - name: DISABLE_DANGEROUS_API_CALLS
+    type: bool
+    description: |
+      Enable this to disable potentially flakey APIs which may cause
+      crashes.
 
 sources:
   - precondition: SELECT OS From info() where OS = 'windows'
-    
+
     query: |
-        LET ProcList <= SELECT * FROM pslist()
+        LET ProcList = SELECT * FROM if(condition=UseTracker,
+        then={
+          SELECT Pid, Ppid, NULL AS TokenIsElevated,
+                 Username, Name, CommandLine, Exe, NULL AS Memory
+          FROM process_tracker_pslist()
+        }, else={
+          SELECT * FROM pslist()
+        })
+        
+        LET parent_process_calc(parent_id) = SELECT CommandLine FROM ProcList WHERE Pid=parent_id
         
         LET Conns <= SELECT * FROM Artifact.Windows.Network.Netstat()
         
         LET network_conn(process_id) = SELECT * FROM Conns WHERE Pid = process_id
-        
-        LET parent_process_calc(parent_id) = SELECT CommandLine FROM process_tracker_pslist(pid=parent_id)
 
-            SELECT Pid, CommandLine, Exe, Username, Ppid, TokenIsElevated, Name, 
-            if(condition=NOT Ppid=0, then=parent_process_calc(parent_id=Ppid)[0].CommandLine) as ParentCommandLine,
+        SELECT Pid, Ppid, TokenIsElevated, Name, CommandLine, Exe,
+            parent_process_calc(parent_id=Ppid)[0].CommandLine as ParentCommandLine,
             join(array=process_tracker_callchain(id=Pid).Data.Name, sep="->") as ProcessTree,
             process_tracker_tree(id=Pid).children as ChildProcesses,
-            process_tracker_tree(id=Pid).data.StartTime as StartTime,
+            --process_tracker_tree(id=Pid).data.StartTime as StartTime,
             network_conn(process_id=Pid) as NetworkConnections,
-            hash(path=Exe).SHA256 as SHA256,
-            authenticode(filename=Exe).Trusted AS Trusted, Memory.WorkingSetSize AS WorkingSetSize
+            --token(pid=int(int=Pid)) as TokenInfo,
+            hash(path=Exe) as Hash,
+            authenticode(filename=Exe) AS Authenticode,
+            Username, Memory.WorkingSetSize AS WorkingSetSize
         FROM ProcList
         WHERE Name =~ ProcessRegex
             AND Pid =~ PidRegex
