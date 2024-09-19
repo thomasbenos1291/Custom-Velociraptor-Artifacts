@@ -42,6 +42,9 @@ This artifact deploys CrowdResponse for yara scanning. The configuration file mu
 ### Custom.Windows.Scan.LokiEnriched
 Upgraded VQL artifact of Loki Scanner. You have to include the signature-base folder inside the loki.zip\loki folder and rename the executable to "loki.exe"
 
+### Custom.Generic.Scanner.ThorZIP.yaml
+Customised version of the original VQL artifact of THOR scanner that also parses the .json that is produced.
+
 ### Custom.Artifact.Windows.Search.AlienVault
 Downloads a .csv file from AlienVault and hunts the endpoint.
 Works with Custom.Windows.System.DNSCache in order to look effectively in the reversed ".in-addr.arpa" entries.
@@ -57,3 +60,15 @@ Run client interrogation periodically with Custom.Server.RunCustomInfo in order 
 
 ### Custom.Windows.EventLogs.ScriptBlockHunter
 Hunt for the Windows ScriptBlock event log 4104 and concatenate all events by ScriptBlock Id to produce the whole script.
+
+### Custom.Windows.EventLogs.HayabusaNew
+Customised version of Hayabusa that utilizes an installation artifact in order for the hayabusa binary to be always inside the Tools directory of Velociraptor.
+
+### Custom.Windows.Sysinternals.Autoruns
+Customised version of the original VQL artifact that also utilizes VirusTotal query from the endpoint.
+
+### Custom.Server.Monitoring.ScheduleAllFlowDeletion
+Custom artifact that schedules the deletion of all flows in a certain time period to make up space in the datastore.
+
+### Custom.Windows.Detection.ISOMount
+Customized version of the original artifact.
