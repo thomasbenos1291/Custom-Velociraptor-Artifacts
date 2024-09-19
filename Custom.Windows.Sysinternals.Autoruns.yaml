@@ -3,7 +3,7 @@ description: |
   Uses Sysinternals autoruns to scan the host.
 
   Note this requires syncing the sysinternals binary from the host.
-
+  Edited the original artifact for usage of VirusTotal query and Unknown flags.
 tools:
   - name: Autorun_386
     url: https://live.sysinternals.com/tools/autorunsc.exe
@@ -61,6 +61,7 @@ parameters:
     default: Y
   - name: Unknown
     type: bool
+    description: Only show VirusTotal unknown or malicious entries.
     default: Y
   - name: ExcludeMicrosoft
     type: bool
@@ -112,15 +113,15 @@ sources:
             '-nobanner', '-accepteula', '-t', '-a',
             join(array=flags.Option, sep=""),
             --join(array=options.Option, sep=" "),
-            if(condition=`Verify digital signatures`=TRUE, then="-s"),
-            if(condition=VTQuery=TRUE, then="-v"),
-            if(condition=VTQuery=TRUE, then="-vt"),
-            if(condition=Unknown=TRUE, then="-u"),
-            if(condition=ExcludeMicrosoft=TRUE, then="-m"),
+            if(condition=`Verify digital signatures`=TRUE, then="-s", else=""),
+            if(condition=VTQuery=TRUE, then="-v", else=""),
+            if(condition=VTQuery=TRUE, then="-vt", else=""),
+            if(condition=Unknown=TRUE, then="-u", else=""),
+            if(condition=ExcludeMicrosoft=TRUE, then="-m", else=""),
             '-c', -- CSV output
             '-h', -- Also calculate hashes
             '*'   -- All user profiles.
-      ], regex="."), length=10000000)
+      ], regex='[a-zA-Z0-9\-\*]'), length=10000000) WHERE log(message=Stderr)
 
       // Parse the CSV output and return it as rows. We can filter this further.
       SELECT * FROM if(condition=bin,
