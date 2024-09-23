@@ -40,7 +40,7 @@ This artifact checks for hollow processes with the following methology:
 This artifact deploys CrowdResponse for yara scanning. The configuration file must either be uploaded or entered in the appropriate field.
 
 ### Custom.Windows.Scan.LokiEnriched
-Upgraded VQL artifact of Loki Scanner. You have to include the signature-base folder inside the loki.zip\loki folder and rename the executable to "loki.exe"
+Upgraded VQL artifact of Loki Scanner.
 
 ### Custom.Generic.Scanner.ThorZIP.yaml
 Customised version of the original VQL artifact of THOR scanner that also parses the .json that is produced.
@@ -71,4 +71,4 @@ Customised version of the original VQL artifact that also utilizes VirusTotal qu
 Custom artifact that schedules the deletion of all flows in a certain time period to make up space in the datastore.
 
 ### Custom.Windows.Detection.ISOMount
-Customized version of the original artifact.
+Customized version of the original artifact in order to use VSSAnalysisAge instead of SearchVSS parameter due to update of the Windows.EventLogs.EvtxHunter artifact.
