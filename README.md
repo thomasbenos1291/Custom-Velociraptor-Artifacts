@@ -39,6 +39,9 @@ This artifact checks for hollow processes with the following methology:
         ▪ There is no VAD entry corresponding to PEB.ImageBaseAddress or
         ▪ There is an executable in processes’ VADs that PEB.ImageBaseAddress does not point to and has PAGE_EXECUTE_WRITECOPY protection.
 
+### Custom.Windows.Scan.YaraTool
+This artifact deploys the classic Yara scanner tool in Windows. Can scan both processes and a given target directory.
+
 ### Custom.Windows.Scan.CrowdResponse
 This artifact deploys CrowdResponse for yara scanning. The configuration file must either be uploaded or entered in the appropriate field.
 
@@ -69,6 +72,9 @@ Customised version of Hayabusa that utilizes an installation artifact in order f
 
 ### Custom.Windows.Sysinternals.Autoruns
 Customised version of the original VQL artifact that also utilizes VirusTotal query from the endpoint.
+
+### Custom.Windows.Sysinternals.Sigcheck
+Deploys Sysninternals Sigcheck and also can utilize VirusTotal query from the endpoint.
 
 ### Custom.Server.Monitoring.ScheduleAllFlowDeletion
 Custom artifact that schedules the deletion of all flows in a certain time period to make up space in the datastore.
