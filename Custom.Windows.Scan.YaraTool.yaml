@@ -7,20 +7,27 @@ author: Thomas Benos, @thomasbenos1291
 
 tools:
   - name: yara64
-    url: https://github.com/VirusTotal/yara/releases/download/v4.5.1/yara-master-2298-win64.zip
+    url: https://github.com/VirusTotal/yara/releases/download/v4.5.2/yara-v4.5.2-2326-win64.zip
     
 precondition: 
   SELECT OS From info() where OS = 'windows'
   
 parameters:
-  - name: Target
+  - name: TargetDir
     type: string
     default: C:\
-    description: Target directory
+    description: Target directory. Leave blank to not scan any directory.
   - name: Recurse
     type: bool
     description: Perform recursive scan
     default: TRUE
+  - name: ProcessRegex
+    description: If set, will scan processes by name that matches that regex or by pid equal to the provided number. Leave blank in order to not scan processes.
+    type: string
+    default: .
+  - name: ThreadLimit
+    type: int
+    default: 2
   - name: YaraFile
     description: If configured will attempt to download Yara rules form Url
     type: upload
@@ -75,35 +82,45 @@ parameters:
         
 sources:
   - query: |
+        --Get the processes table
+        LET processes = SELECT * FROM if(condition=ProcessRegex, then={SELECT * FROM pslist() WHERE Exe=~ProcessRegex OR Pid=int(int=ProcessRegex)})
+        
         -- Scan the host
         LET Toolzip <= SELECT OSPath FROM Artifact.Generic.Utils.FetchBinary(ToolName="yara64", IsExecutable=FALSE)
         
-        LET TmpDir <= tempdir()
-        
+        LET TmpDir <= tempdir(remove_last=TRUE)
+
         LET UnzipIt <= SELECT * FROM unzip(filename=Toolzip.OSPath, output_directory=TmpDir)
         
         LET yara_data <= YaraFile || YaraRule
         
-        LET yara_rule <= tempfile(data=yara_data, extension=".yar")
+        LET yara_rule <= copy(filename=tempfile(remove_last=TRUE, data=yara_data, extension=".yar"), dest=TmpDir+"\\yara_rule\.yar")
         
-        LET outputfile = TmpDir+"\\output.csv"
-
-        LET exec <= SELECT Stdout FROM execve(argv=filter(list=[
-                                "cmd.exe", "/c",
-                                TmpDir+"\\yara64.exe",
-                                if(condition=Recurse, then="-r", else=""),
-                                "-m",
-                                yara_rule, Target, ">", outputfile
-                                ], 
-                                regex=".")) 
-                                WHERE log(message=Stdout)
+        LET dir_command = '& "'+TmpDir+'\\yara64\.exe" '+if(condition=Recurse, then="-r", else="")+' -m "'+TmpDir+'\\yara_rule\.yar" "'+TargetDir+'" -p '+str(str=ThreadLimit)
         
-        LET results = SELECT * FROM split_records(filenames=outputfile, accessor="auto", regex=" " , columns=['Rule', 'Metadata'], count=2)
-                
-        LET output = SELECT Rule, split(string=Metadata, sep_string=''']''')[0] as Metadata, 
-                split(string=Metadata, sep_string=''']''')[1] as File
-                FROM results
+        LET pid_command(Pid) = "yara64\.exe"+if(condition=Recurse, then="-r", else="")+" -m yara_rule\.yar "+str(str=Pid)+" -p "+str(str=ThreadLimit)
+        
+        
+        LET powershell_exec(command) = SELECT * FROM execve(cwd=TmpDir, argv=["powershell\.exe","-ExecutionPolicy", "Unrestricted", "-encodedCommand",base64encode(string=utf16_encode(string=command))]) 
+        WHERE log(message=Stderr) AND log(message=Stdout)
+        
+        LET cmd_exec(command) = SELECT * FROM execve(cwd=TmpDir, argv=["cmd\.exe","/c",command]) WHERE log(message=Stderr) AND log(message=Stdout)
                                 
-        LET rules = SELECT Rule as TriggeredRule, Metadata as RuleMetadata FROM output GROUP BY TriggeredRule
+        LET create_table <= SELECT * FROM chain(
+            a={SELECT * FROM if(condition=TargetDir, then=powershell_exec(command=dir_command))},
+            b={
+                SELECT * FROM foreach(row=processes, query={SELECT * FROM cmd_exec(command=pid_command(Pid=Pid))})
+            }
+        )       
+        
+        LET ParseLines = 
+        SELECT * FROM parse_lines(filename=create_table.Stdout, accessor="data")
+        
+        LET YaraGrok = "%{WORD:yara_rule} \\[%{GREEDYDATA:metadata}] %{GREEDYDATA:file_path}"
                 
-        SELECT TriggeredRule, RuleMetadata, {SELECT File FROM output WHERE Rule=TriggeredRule} as TriggeredFiles FROM rules
+        LET ParsedData = SELECT grok(grok=YaraGrok, data=Line) AS Parsed FROM ParseLines
+                
+        SELECT Parsed.yara_rule AS YaraRule, Parsed.metadata AS RuleMetadata, Parsed.file_path AS Matched,
+        --also process characteristics for pid matched
+        {SELECT Ppid, Name, Username, CommandLine, Exe, TokenIsElevated, CreateTime, IsWow64 FROM processes WHERE str(str=Pid)=Parsed.file_path} as ProcDetails
+        FROM ParsedData
