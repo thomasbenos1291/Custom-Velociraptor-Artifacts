@@ -168,11 +168,6 @@ sources:
         LET JSONL_RESULT = SELECT * FROM parse_jsonl(filename=ResultFile)
         LET s = scope()
         
-        //Function to find the appropriate rule to parse
-        LET find_sigma(RuleFile) = 
-        SELECT parse_yaml(filename=OSPath) as SigmaRule FROM sigma_directory WHERE OSPath=~RuleFile
-        
         //Build the table
-        SELECT *, timestamp(string=s.Timestamp || s.datetime) AS EventTime, 
-        find_sigma(RuleFile=RuleFile)[0].SigmaRule as _Rule
+        SELECT *, timestamp(string=s.Timestamp || s.datetime) AS EventTime
         FROM if(condition= OutputFormat = "csv", then=CSV_RESULT, else=JSONL_RESULT)
