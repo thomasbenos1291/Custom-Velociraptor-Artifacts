@@ -1,0 +1,81 @@
+name: Custom.Windows.Sysinternals.Sigcheck
+description: |
+  Uses Sysinternals sigcheck to scan the host.
+
+  Note this requires syncing the sysinternals binary from the host.
+
+tools:
+  - name: Sigcheck_386
+    url: https://live.sysinternals.com/tools/sigcheck.exe
+    serve_locally: true
+
+  - name: Sigcheck_amd64
+    url: https://live.sysinternals.com/tools/sigcheck64.exe
+    serve_locally: true
+
+precondition: SELECT OS From info() where OS = 'windows'
+
+parameters:
+  - name: ScanPath
+    description: Directory to scan
+    type: string
+    default: C:\Users\
+  - name: OnlyExecutables
+    description: Scan executables only (regardless of extension)
+    type: bool
+    default: Y
+  - name: Recurse
+    description: Recurse subdirectories
+    type: bool
+    default: Y
+  - name: VTQuery
+    description: Query the hashes to VirusTotal.
+    type: bool
+    default: Y
+  - name: Unknown
+    description: Only show unknown/malicious VT entries (only unsigned if not used with VTQuery)
+    type: bool
+    default: Y
+  - name: ToolInfo
+    type: hidden
+    description: Override Tool information.
+
+sources:
+  - query: |
+      LET Options = '''Option,Name
+      -e,OnlyExecutables
+      -s,Recurse
+      -v,VTQuery
+      -vt,VTQuery
+      -u,Unknown
+      '''
+
+      -- The options actually selected
+      LET options = SELECT Option FROM parse_csv(accessor="data", filename=Options)
+        WHERE get(field=Name)
+
+
+      LET os_info <= SELECT Architecture FROM info()
+
+      // Get the path to the binary.
+      LET bin <= SELECT * FROM Artifact.Generic.Utils.FetchBinary(
+              ToolName= "Sigcheck_" + os_info[0].Architecture,
+              ToolInfo=ToolInfo)
+      
+            // Call the binary and return all its output in a single row.
+      LET output = SELECT * FROM execve(argv=filter(list=[bin[0].OSPath,
+            '-nobanner', '-accepteula',
+            if(condition=OnlyExecutables=TRUE, then="-e", else=""),
+            if(condition=Recurse=TRUE, then="-s", else=""),
+            if(condition=VTQuery=TRUE, then="-v", else=""),
+            if(condition=VTQuery=TRUE, then="-vt", else=""),
+            if(condition=Unknown=TRUE, then="-u", else=""),
+            '-c', -- CSV output
+            '-h', -- Also calculate hashes
+            ScanPath
+      ], regex='[a-zA-Z0-9\-\*]'), length=10000000) WHERE log(message=Stderr)
+
+      // Parse the CSV output and return it as rows. We can filter this further.
+      LET logfile = tempfile(data=output[0].Stdout, extension=".csv", remove_last=TRUE)
+
+      SELECT * FROM parse_csv(filename=logfile)
