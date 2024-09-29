@@ -12,6 +12,9 @@ This artifact deploys the classic Yara scanner and presents all files detected g
 ### Custom.Windows.System.Pslist
 A custom version updated to also show the child processes of each process.
 
+### Custom.Windows.Linux.Pslist
+A custom version updated to also show the child processes of each linux process.
+
 ### Generic.Remediation.Process
 This artifact enables killing a process by Name, Path, PID or Hash, both in Windows and Linux.
 
