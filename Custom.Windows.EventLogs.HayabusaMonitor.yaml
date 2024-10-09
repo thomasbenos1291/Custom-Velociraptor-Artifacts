@@ -1,0 +1,44 @@
+name: Custom.Windows.EventLogs.HayabusaMonitor
+description: |
+    Run hayabusa for monitoring every 2m by default for the previous 2
+    This can give you near-real-time monitoring capability.
+    
+author: Thomas Benos
+
+type: CLIENT_EVENT
+
+reference: 
+
+parameters:
+  - name: Period
+    default: 60
+    type: int
+    description: how many seconds the artifact waits between checking for changes
+  - name: TimelineOffset
+    default: 2
+    type: int
+    description: the number of minutes to look back for events
+  - name: MinimalLevel
+    description: "Minimum level for rules"
+    default: medium
+    type: choices
+    choices:
+      - informational
+      - low
+      - medium
+      - high
+      - critical    
+    
+precondition: 
+  SELECT OS From info() where OS = 'windows'
+  
+sources:
+  - query:  |
+      
+      LET HayabusaOutput = SELECT *, format(format="%v %v %v %v %v %v %v %v %v %v %v %v %v %v %v %v", 
+      args=[Timestamp, RuleTitle, Level, Computer, Channel, EventID, RecordID, AllFieldInfo, RuleFile, EvtxFile, EventTime, MitreTactics, MitreTags, OtherTags]) AS _DiffKey 
+      FROM Artifact.Custom.Windows.EventLogs.HayabusaNew(InstallTool='N', MinimalLevel=MinimalLevel, OutputFormat="jsonl", TimelineOffset=str(str=TimelineOffset)+"m")
+          
+      LET EventQuery = SELECT * FROM diff(query=HayabusaOutput, period=Period, key="_DiffKey")
+      
+      SELECT * FROM EventQuery
