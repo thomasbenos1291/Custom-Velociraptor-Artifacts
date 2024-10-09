@@ -70,6 +70,9 @@ Hunt for the Windows ScriptBlock event log 4104 and concatenate all events by Sc
 ### Custom.Windows.EventLogs.HayabusaNew
 Customised version of Hayabusa that utilizes an installation artifact in order for the hayabusa binary to be always inside the Tools directory of Velociraptor.
 
+### Custom.Windows.EventLogs.HayabusaMonitor
+Monitoring artifact that executes Hayabusa every 2 minutes (by default) for events that happened 2 minutes ago (by default) in order to have near-real-time monitoring.
+
 ### Custom.Windows.Sysinternals.Autoruns
 Customised version of the original VQL artifact that also utilizes VirusTotal query from the endpoint.
 
