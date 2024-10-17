@@ -16,6 +16,10 @@ author: Thomas Benos @thomasbenos1291
 precondition: SELECT OS From info() where OS = 'windows'
 
 parameters:
+ - name: InstallTool
+   type: bool
+   description: "If selected, will install Hayabusa in the Velociraptor Tools and update the rules."
+   default: Y
  - name: EvtxDirectory
    description: "Directory of .evtx files"
    default: C:\Windows\System32\winevt\Logs
@@ -105,24 +109,20 @@ parameters:
 sources:
     - query: |
         
-        //Variable query to call in order to install hayabusa if it does not exist
-        LET InstallHayabusa = SELECT * FROM if(condition=InstallTool,then={SELECT * FROM Artifact.Custom.Windows.EventLogs.HayabusaInstallNew()})
+        //Install hayabusa if selected
+        LET InstallHayabusa = if(condition=InstallTool,then={SELECT * FROM Artifact.Custom.Windows.EventLogs.HayabusaInstallNew()})
         
-        //Find the tools directory to search the tool from
+        //Find the tools directory to install the tool
+        --LET FindExec = SELECT OSPath FROM glob(globs=["C:\\Windows\\TEMP\\hayabusa\\hayabusa*exe","C:\\Program Files\\Velociraptor\\Tools\\hayabusa\\hayabusa*exe"])
         LET tools_directory = SELECT dirname(path=tempdir()) as dir FROM scope()
         
-        //Store the sigma rules paths into a variable query
-        LET sigma_directory <= SELECT OSPath FROM glob(globs=[tools_directory[0].dir +"\\hayabusa\\rules\\sigma\\**"]) WHERE IsDir = "false"
-        
-        //Find the executable path, if exists
+        //Find the executable path
         LET FindExec = SELECT OSPath FROM glob(globs=[tools_directory[0].dir +"\\hayabusa\\hayabusa*exe"])
         
-        //Choose either the existing tool or install Hayabusa if it does not exist
-        LET HayabusaExe = FindExec[0].OSPath || InstallHayabusa[0].HayabusaExe  
+        LET HayabusaExe = InstallHayabusa[0].HayabusaExe || FindExec[0].OSPath
         
         LET ToolDir = dirname(path=HayabusaExe)
         
-        //Either csv or json
         LET HayabusaCmd <= if(condition=OutputFormat = "csv", then="csv-timeline", else="json-timeline")
         
         LET ResultFile <= ToolDir + if(condition=OutputFormat = "csv", then="\\hayabusa_results\.csv", else="\\hayabusa_results\.json")
@@ -168,6 +168,5 @@ sources:
         LET JSONL_RESULT = SELECT * FROM parse_jsonl(filename=ResultFile)
         LET s = scope()
         
-        //Build the table
         SELECT *, timestamp(string=s.Timestamp || s.datetime) AS EventTime
         FROM if(condition= OutputFormat = "csv", then=CSV_RESULT, else=JSONL_RESULT)
