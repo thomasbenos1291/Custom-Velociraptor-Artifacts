@@ -1,6 +1,6 @@
 name: Custom.Windows.EventLogs.HayabusaMonitor
 description: |
-    Run hayabusa for monitoring every 2m by default for the previous 2
+    Run hayabusa for monitoring every 2m by default for the previous 2m.</br>
     This can give you near-real-time monitoring capability.
     
 author: Thomas Benos
