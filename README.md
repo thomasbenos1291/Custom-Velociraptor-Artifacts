@@ -84,3 +84,6 @@ Custom artifact that schedules the deletion of all flows in a certain time perio
 
 ### Custom.Windows.Detection.ISOMount
 Customized version of the original artifact in order to use VSSAnalysisAge instead of SearchVSS parameter due to update of the Windows.EventLogs.EvtxHunter artifact.
+
+### Custom.Server.Utils.DeleteDuplicateClients
+Finds and deletes duplicate clients. Keeps the most recent.
