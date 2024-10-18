@@ -1,0 +1,29 @@
+name: Custom.Server.Utils.DeleteDuplicateClients
+description: |
+   Finds and deletes duplicate clients. Keeps the most recent.
+
+type: SERVER
+
+sources:
+  - query: |
+        LET initial = SELECT client_id, os_info.hostname as hostname, last_seen_at, count() as count FROM clients()
+        GROUP BY os_info.hostname
+        ORDER BY count DESC
+        
+        LET duplicates = SELECT hostname FROM initial WHERE count > 1
+        
+        LET clients_to_keep = 
+        SELECT * FROM foreach(
+        row=duplicates,
+        query={SELECT client_id, os_info.hostname, last_seen_at - now() as diff FROM clients() 
+        WHERE os_info.hostname = hostname ORDER BY diff LIMIT 1
+        }
+        )
+        
+        SELECT client_id, os_info.hostname, last_seen_at - now() as diff,
+        {SELECT * FROM client_delete(client_id=client_id, really_do_it=TRUE)} as Deleted
+        FROM clients() 
+        WHERE os_info.hostname IN duplicates.hostname
+        AND NOT client_id IN clients_to_keep.client_id 
+        ORDER BY diff
+        
