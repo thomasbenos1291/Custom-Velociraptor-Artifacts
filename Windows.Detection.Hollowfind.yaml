@@ -1,7 +1,7 @@
 name: Windows.Detection.Hollowfind
-author: Thomas Benos @thomasbenos1291
+author: Thomas Benos
 description: |
-    This artifact checks for hollow processes with the following methology:
+    This artifact checks for hollow processes or process injections with the following methology:
     
     1.	Creates a list of processes using pslist plugin
     2.  For each process, it retrieves information from the process structure, PEB and
@@ -219,123 +219,89 @@ parameters:
 
 sources:
   - query: |
-        //get peb
-        LET dlllist(Pid) = SELECT ProcessID,
-        "0x"+format(format='%x', args=[ModuleBaseAddress]) AS Base,
-        ModuleBaseSize as Size,
-        ExePath as Path
-        FROM modules(pid=Pid)
-        
-        //get pebbaseaddress from peb where executable
-        LET find_dlllist_base(pid) = SELECT * FROM foreach(
-            row={SELECT * FROM pslist(pid=pid)},
-            query={
-                SELECT Pid,Name,Exe,CommandLine,CreateTime as PebCreateTime,
-                Base as PebBaseAddress,Size,Path FROM dlllist(Pid=Pid)
-                WHERE lowcase(string=Path) = lowcase(string=Exe)
-            }
-        )
-        
-        //get vad from base_address
+        LET dllist(Pid) =
+        SELECT "0x"+format(format='%x', args=[ModuleBaseAddress]) AS PebBaseAddress,
+                ModuleBaseSize as Size,
+                ExePath
+                FROM modules(pid=Pid)
+                
         LET ldrmodules(Pid) = 
-        SELECT Pid, format(format='%x-%x', args=[Address, Address+Size]) AS AddressRange,
-                        {SELECT PebBaseAddress FROM find_dlllist_base(pid=Pid)} as _PebBaseAddress,
-                        "0x"+format(format='%x', args=[Address]) AS VadBaseAddress, State, Type,
-                        Protection, ProtectionMsg as VadMemoryProtection, Address as _Address,
-                        Size as SectionSize, MappingName as MappedPath,
-                        pathspec(
-                            DelegateAccessor="process",
-                            DelegatePath=Pid,
-                            Path=Address) AS _PathSpec
-                    FROM vad(pid = Pid)
-                    WHERE VadBaseAddress IN _PebBaseAddress
+                SELECT Pid, format(format='%x-%x', args=[Address, Address+Size]) AS AddressRange,
+                                "0x"+format(format='%x', args=[Address]) AS VadBaseAddress, State, Type,
+                                Protection, ProtectionMsg as VadMemoryProtection, Address as _Address,
+                                Size as SectionSize, MappingName as MappedPath,
+                                pathspec(
+                                    DelegateAccessor="process",
+                                    DelegatePath=Pid,
+                                    Path=Address) AS _PathSpec
+                            FROM vad(pid = Pid)
+
+       
+        LET comparison(Pid) = SELECT * FROM foreach(
+                row=ldrmodules(Pid=Pid),
+                query={SELECT {SELECT PebBaseAddress, ExePath as ModulePath FROM dllist(Pid=Pid) WHERE VadBaseAddress=PebBaseAddress
         
-        
-        LET processes <= SELECT CreateTime,Pid, Name, CommandLine,
-        Exe as PebProcessPath,
-        {SELECT PebBaseAddress FROM find_dlllist_base(pid=Pid)} as PebBaseAddress, 
-        ldrmodules(Pid=Pid)[0] as LdrModules
-                FROM pslist()
-                WHERE Name =~ ProcessRegex
-                AND format(format="%d", args=Pid) =~ PidRegex
-                    AND log(message="Scanning pid %v : %v", args=[Pid, Name])
-        
-        
-        LET hollowfind <= SELECT *,
-                    unhex(string=format(format='% x',args=read_file(
-                             accessor='offset',
-                             filename=LdrModules._PathSpec,
-                             length=2))) as HexHeader,
-                    magic(path=LdrModules._PathSpec, accessor='offset') as DataMagic,
-                    base64encode(string=read_file(
-                             accessor='offset',
-                             filename=LdrModules._PathSpec,
-                             length= if(condition= SectionDataGuiSize > LdrModules.SectionSize,
-                                then= LdrModules.SectionSize,
-                                else= SectionDataGuiSize)
-                                )) as SectionData, YaraHit
-                FROM foreach(row=processes,
+        } as PebInfo,
+        dict(
+        Pid=Pid,AddressRange=AddressRange,VadBaseAddress=VadBaseAddress,State=State,Type=Type, Protection=Protection, VadMemoryProtection=VadMemoryProtection, _Address=_Address, SectionSize=SectionSize, MappedPath=MappedPath, _PathSpec=_PathSpec
+        ) as LdrModules
+                FROM scope()
+                }
+                )
+       
+        LET processes <=
+                    SELECT * FROM foreach(
+                    row={SELECT * FROM pslist() WHERE Name =~ ProcessRegex AND format(format="%d", args=Pid) =~ PidRegex AND log(message="Scanning pid %v : %v", args=[Pid, Name])},
                     query={
-                        SELECT 
-                          CreateTime, Pid, Name, CommandLine,PebProcessPath,PebBaseAddress,LdrModules,
-                          LdrModules.AddressRange as AddressRange,
-                            enumerate(items=dict(
-                                Rule=Rule,
-                                Meta=Meta,
-                            	Tags=Tags,
-                            	String=String)) as YaraHit
-                        FROM yara(
-                                    accessor='offset',
-                                    files=LdrModules._PathSpec, 
-                                    rules=SuspiciousContent,
-                                    end=LdrModules.SectionSize,  key='X', 
-                                    number=NumberOfHits,
-                                    context=ContextBytes
-                                )
-                        GROUP BY CreateTime,Pid, Name, AddressRange
-                    })
-        
-        /*No Vad Entry for Process Executable */
-        LET no_vad_entry = SELECT *, "No Vad Entry for Process Executable" as `Hollow Type` FROM processes WHERE NOT LdrModules AND PebBaseAddress
-        
-        /*Base Address and Memory Protection Discrepancy*/
-        LET address_and_memory = SELECT *, 
-        "Base Address and Memory Protection Discrepancy"
-        as `Hollow Type`
-        FROM hollowfind
-        WHERE NOT PebBaseAddress = LdrModules.VadBaseAddress 
-        AND LdrModules.VadMemoryProtection=~'''WRITECOPY|READWRITE'''
-        
-        /*Process Path Discrepancy*/
-        LET process_path = SELECT *, 
-        "Process Mapped Path Discrepancy or Absent Mapped Path from VAD" as `Hollow Type`
-        //{SELECT regex_replace(re=DriveLetter, replace=DevicePath, source=PebProcessPath) 
-        //FROM calculate_peb_path(peb_path=PebProcessPath)} as CompareVadPebProcessPath
-        FROM hollowfind
-        WHERE NOT 
-        lowcase(string=parse_string_with_regex(regex='''.\:(.*)''', string=PebProcessPath).g1)=
-        parse_string_with_regex(
-            string=lowcase(string=parse_string_with_regex(regex='''(\\.*)''', string=LdrModules.MappedPath).g1),
-            regex='''\\device\\harddiskvolume\d(.+)'''
-        ).g1
-        
-        
-        LET final = SELECT * FROM chain(
-            async=TRUE,
-            a=no_vad_entry,
-            b=address_and_memory,
-            c=process_path
-        )
-        
-        SELECT *, if(condition=UploadSection, then=
-                upload(accessor='sparse', 
-                  file=pathspec(
-                    DelegateAccessor="process",
-                    DelegatePath=Pid,
-                    Path=[dict(Offset=LdrModules._Address, Length=LdrModules.SectionSize),]), 
-                    name=format(format='%v-%v_%v.bin',args= [ Name, Pid, AddressRange ])
-                    )) as SectionDump FROM final
-        
+                        SELECT CreateTime,Pid, Name, CommandLine,
+                            Exe, * FROM comparison(Pid=Pid) 
+                            WHERE LdrModules.Protection="xrw" //suspicious memory protection
+                            OR (NOT LdrModules.MappedPath AND PebInfo.ModulePath) //suspicious unmapped memory
+                            --OR (LdrModules.MappedPath AND NOT PebInfo.ModulePath) //suspicious hidden memory
+                            OR (NOT (PebInfo.ModulePath AND regex_replace(re='''^(.\:\\)''', replace="", source=PebInfo.ModulePath) IN LdrModules.MappedPath) AND LdrModules.VadMemoryProtection="PAGE_EXECUTE_WRITECOPY") //suspicious memory protection and path discrepancy
+                    }
+                    ) 
+            
+        LET hollowfind <= SELECT *,
+                                dict(
+                                MemoryProtection=if(condition=LdrModules.Protection=~'xrw', then=true, else=""),
+                                UnmappedPath=if(condition=NOT LdrModules.MappedPath AND PebInfo.ModulePath, then=true, else=""),
+                                --HiddenMemory=if(condition=(LdrModules.MappedPath AND NOT PebInfo.ModulePath), then=true, else=""),
+                                PathDiscrepancy=if(condition=(NOT (PebInfo.ModulePath AND regex_replace(re='''^(.\:\\)''', replace="", source=PebInfo.ModulePath) IN LdrModules.MappedPath) AND LdrModules.VadMemoryProtection="PAGE_EXECUTE_WRITECOPY"), then=true, else="")
+                                ) as Detection,
+                                unhex(string=format(format='% x',args=read_file(
+                                         accessor='offset',
+                                         filename=LdrModules._PathSpec,
+                                         length=2))) as HexHeader,
+                                magic(path=LdrModules._PathSpec, accessor='offset') as DataMagic,
+                                base64encode(string=read_file(
+                                         accessor='offset',
+                                         filename=LdrModules._PathSpec,
+                                         length= LdrModules.SectionSize
+                                            )) as SectionData, YaraHit
+                            FROM foreach(row=processes,
+                                query={
+                                    SELECT 
+                                      CreateTime, Pid, Name, CommandLine,Exe,PebInfo,LdrModules,
+                                        enumerate(items=dict(
+                                            Rule=Rule,
+                                            Meta=Meta,
+                                        	Tags=Tags,
+                                        	String=String)) as YaraHit
+                                    FROM yara(
+                                                accessor='offset',
+                                                files=LdrModules._PathSpec, 
+                                                rules=SuspiciousContent,
+                                                end=LdrModules.SectionSize,  key='X', 
+                                                number=NumberOfHits,
+                                                context=ContextBytes
+                                            )
+                                    GROUP BY CreateTime,Pid, Name, LdrModules.AddressRange
+                                })
+                    
+                    
+                    SELECT * FROM hollowfind
+                
 column_types:
   - name: SectionData
     type: base64hex
