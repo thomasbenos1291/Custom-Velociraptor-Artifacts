@@ -233,6 +233,7 @@ sources:
                 ModuleBaseSize as Size,
                 ExePath
                 FROM modules(pid=Pid)
+                GROUP BY PebBaseAddress,Size,ExePath
     
       LET processes = SELECT Pid, Name,Exe,CommandLine,CreateTime
         FROM pslist()
@@ -263,14 +264,14 @@ sources:
         } as Modules FROM hits
         WHERE (NOT MappingName AND Modules.ExePath)
                         OR Protection =~ ProtectionRegex
-                        OR ((Modules.ExePath AND MappingName) AND NOT lowcase(string=regex_replace(re='''^(.\:\\)''', replace="", source=Modules.ExePath)) IN lowcase(string=MappingName))
+                        OR ((Modules.ExePath AND MappingName) AND NOT lowcase(string=regex_replace(re='''^(.+?\:\\)''', replace="", source=Modules.ExePath)) IN lowcase(string=MappingName))
 
           
       LET results <= SELECT *,
             dict(
                     MemoryProtection=if(condition=Protection=~ProtectionRegex, then=true, else=""),
                     UnmappedPath=if(condition=(NOT MappingName AND Modules.ExePath), then=true, else=""),
-                    PathDiscrepancy=if(condition=((Modules.ExePath AND MappingName) AND NOT lowcase(string=regex_replace(re='''^(.\:\\)''', replace="", source=Modules.ExePath)) IN lowcase(string=MappingName)), then=true, else="")
+                    PathDiscrepancy=if(condition=((Modules.ExePath AND MappingName) AND NOT lowcase(string=regex_replace(re='''^(.+?\:\\)''', replace="", source=Modules.ExePath)) IN lowcase(string=MappingName)), then=true, else="")
                                 ) as Detection,
             format(format='% x',args=read_file(
                      accessor='offset',
