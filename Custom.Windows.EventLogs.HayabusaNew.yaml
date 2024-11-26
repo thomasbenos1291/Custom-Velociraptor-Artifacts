@@ -16,10 +16,6 @@ author: Thomas Benos @thomasbenos1291
 precondition: SELECT OS From info() where OS = 'windows'
 
 parameters:
- - name: InstallTool
-   type: bool
-   description: "If selected, will install Hayabusa in the Velociraptor Tools and update the rules."
-   default: Y
  - name: EvtxDirectory
    description: "Directory of .evtx files"
    default: C:\Windows\System32\winevt\Logs
@@ -105,23 +101,33 @@ parameters:
    type: bool
    default: N
    description: "If selected, will upload results to Velociraptor server"
-
+ - name: AlsoLog
+   type: bool
+   default: N
+   description: "If selected, will project the log that triggered the rule"
+ - name: AlsoRule
+   type: bool
+   default: N
+   description: "If selected, will project the rule in json format"
+   
 sources:
     - query: |
         
-        //Install hayabusa if selected
-        LET InstallHayabusa = if(condition=InstallTool,then={SELECT * FROM Artifact.Custom.Windows.EventLogs.HayabusaInstallNew()})
+        //Installs hayabusa if called
+        LET InstallHayabusa = --if(condition=InstallTool,then={
+            SELECT * FROM Artifact.Custom.Windows.EventLogs.HayabusaInstallNew()
+                --})
         
         //Find the tools directory to install the tool
-        --LET FindExec = SELECT OSPath FROM glob(globs=["C:\\Windows\\TEMP\\hayabusa\\hayabusa*exe","C:\\Program Files\\Velociraptor\\Tools\\hayabusa\\hayabusa*exe"])
         LET tools_directory = SELECT dirname(path=tempdir()) as dir FROM scope()
         
         //Find the executable path
         LET FindExec = SELECT OSPath FROM glob(globs=[tools_directory[0].dir +"\\hayabusa\\hayabusa*exe"])
         
-        LET HayabusaExe = InstallHayabusa[0].HayabusaExe || FindExec[0].OSPath
+        //Find hayabusa or install it
+        LET HayabusaExe <= FindExec[0].OSPath || InstallHayabusa[0].HayabusaExe
         
-        LET ToolDir = dirname(path=HayabusaExe)
+        LET ToolDir <= dirname(path=HayabusaExe)
         
         LET HayabusaCmd <= if(condition=OutputFormat = "csv", then="csv-timeline", else="json-timeline")
         
@@ -168,5 +174,16 @@ sources:
         LET JSONL_RESULT = SELECT * FROM parse_jsonl(filename=ResultFile)
         LET s = scope()
         
+        LET results <=
         SELECT *, timestamp(string=s.Timestamp || s.datetime) AS EventTime
         FROM if(condition= OutputFormat = "csv", then=CSV_RESULT, else=JSONL_RESULT)
+        
+        LET find_event(EvtxFile,RecordID,EventID) = SELECT * FROM parse_evtx(filename=EvtxFile, workers=4) WHERE System.EventRecordID = RecordID AND System.EventID.Value = EventID
+
+        LET read_rule(RuleFile) =
+        SELECT Name, parse_yaml(filename=OSPath) as SigmaRule FROM glob(globs=dirname(path=HayabusaExe)+"\**")  WHERE NOT IsDIR AND OSPath=~'''.yml''' AND Name=RuleFile
+        
+        SELECT *,
+        if(condition=AlsoLog, then=find_event(EvtxFile=EvtxFile,RecordID=RecordID,EventID=EventID)[0]) as EventLog,
+        if(condition=AlsoRule, then=read_rule(RuleFile=RuleFile)[0].SigmaRule) as SigmaRule
+        FROM results
