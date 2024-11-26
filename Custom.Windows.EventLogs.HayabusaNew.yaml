@@ -178,12 +178,12 @@ sources:
         SELECT *, timestamp(string=s.Timestamp || s.datetime) AS EventTime
         FROM if(condition= OutputFormat = "csv", then=CSV_RESULT, else=JSONL_RESULT)
         
-        LET find_event(EvtxFile,RecordID,EventID) = SELECT * FROM parse_evtx(filename=EvtxFile, workers=4) WHERE System.EventRecordID = RecordID AND System.EventID.Value = EventID
+        LET find_event(EvtxFile,RecordID,EventID) = SELECT * FROM parse_evtx(filename=EvtxFile) WHERE System.EventRecordID = RecordID AND System.EventID.Value = EventID
 
         LET read_rule(RuleFile) =
         SELECT Name, parse_yaml(filename=OSPath) as SigmaRule FROM glob(globs=dirname(path=HayabusaExe)+"\**")  WHERE NOT IsDIR AND OSPath=~'''.yml''' AND Name=RuleFile
         
         SELECT *,
-        if(condition=AlsoLog, then=find_event(EvtxFile=EvtxFile,RecordID=RecordID,EventID=EventID)[0]) as EventLog,
+        if(condition=AlsoLog, then=find_event(EvtxFile=EvtxFile,RecordID=RecordID,EventID=EventID)) as EventLog,
         if(condition=AlsoRule, then=read_rule(RuleFile=RuleFile)[0].SigmaRule) as SigmaRule
         FROM results
