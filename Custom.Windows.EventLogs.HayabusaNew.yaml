@@ -9,7 +9,7 @@ description: |
    file for further analysis with excel, timeline explorer, elastic
    stack, jq, etc.
    
-   Edited the Windows.EventLogs.HayabusaNew from Eric Capuano - @eric_capuano, Whitney Champion - @shortxstack, Zach Mathis - @yamatosecurity, Fukusuke Takahashi - @fukusuket
+   Edited the Windows.EventLogs.Hayabusa from Eric Capuano - @eric_capuano, Whitney Champion - @shortxstack, Zach Mathis - @yamatosecurity, Fukusuke Takahashi - @fukusuket
    
 author: Thomas Benos @thomasbenos1291
 
