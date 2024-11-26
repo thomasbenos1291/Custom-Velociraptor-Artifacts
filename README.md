@@ -10,7 +10,7 @@ Search for any process handles that match known CobaltStrike named pipe patterns
 This artifact deploys the classic Yara scanner and presents all files detected grouped by rule matched.
 
 ### Custom.Windows.System.Pslist
-A custom version updated to also show the child processes of each process.
+A custom version updated to also show the child processes and network connections of each process.
 
 ### Custom.Windows.Linux.Pslist
 A custom version updated to also show the child processes of each linux process.
