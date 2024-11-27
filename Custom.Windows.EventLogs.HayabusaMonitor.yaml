@@ -28,17 +28,27 @@ parameters:
       - medium
       - high
       - critical    
-    
+  - name: AlsoLog
+    type: bool
+    default: N
+    description: "If selected, will project the log that triggered the rule"
+  - name: AlsoRule
+    type: bool
+    default: N
+    description: "If selected, will project the rule in json format"
+   
 precondition: 
   SELECT OS From info() where OS = 'windows'
   
 sources:
   - query:  |
       
-      LET HayabusaOutput = SELECT *, format(format="%v %v %v %v %v %v %v %v %v %v %v %v %v %v %v %v", 
-      args=[Timestamp, RuleTitle, Level, Computer, Channel, EventID, RecordID, AllFieldInfo, RuleFile, EvtxFile, EventTime, MitreTactics, MitreTags, OtherTags]) AS _DiffKey 
-      FROM Artifact.Custom.Windows.EventLogs.HayabusaNew(InstallTool='N', MinimalLevel=MinimalLevel, OutputFormat="jsonl", TimelineOffset=str(str=TimelineOffset)+"m")
+      LET HayabusaOutput = SELECT *, format(format="%v %v %v %v %v %v %v %v %v %v %v %v %v %v %v", 
+      args=[Timestamp, RuleTitle, Level, Computer, Channel, EventID, RecordID, AllFieldInfo, RuleFile, EvtxFile, EventTime, MitreTactics, MitreTags]) AS _DiffKey 
+      FROM Artifact.Custom.Windows.EventLogs.HayabusaNew(MinimalLevel=MinimalLevel, OutputFormat="jsonl", TimelineOffset=str(str=TimelineOffset)+"m",
+      OutputTimeFormat="RFC-3339", OutputProfile="all-field-info-verbose", AlsoLog=AlsoLog, AlsoRule=AlsoRule
+      )
           
-      LET EventQuery = SELECT * FROM diff(query=HayabusaOutput, period=Period, key="_DiffKey")
+      LET EventQuery = SELECT * FROM diff(query=HayabusaOutput, period=Period, key="_DiffKey") WHERE NOT RuleTitle=~'Sysmon Alert'
       
-      SELECT * FROM EventQuery
+      SELECT * FROM EventQuery WHERE Diff="added"
