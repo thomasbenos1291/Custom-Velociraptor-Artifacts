@@ -123,4 +123,4 @@ sources:
         SELECT Parsed.yara_rule AS YaraRule, Parsed.metadata AS RuleMetadata, Parsed.file_path AS Matched,
         --also process characteristics for pid matched
         {SELECT Ppid, Name, Username, CommandLine, Exe, TokenIsElevated, CreateTime, IsWow64 FROM processes WHERE str(str=Pid)=Parsed.file_path} as ProcDetails
-        FROM ParsedData
+        FROM ParsedData WHERE Matched
