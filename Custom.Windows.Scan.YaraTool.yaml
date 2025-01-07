@@ -21,10 +21,10 @@ parameters:
     type: bool
     description: Perform recursive scan
     default: TRUE
-  - name: ProcessRegex
-    description: If set, will scan processes by name that matches that regex. Leave blank in order to not scan processes.
-    type: string
-    default: .
+  - name: ScanProcesses
+    description: If set, will scan processes
+    type: bool
+    default: Y
   - name: ThreadLimit
     type: int
     default: 2
@@ -83,7 +83,7 @@ parameters:
 sources:
   - query: |
         --Get the processes table
-        LET processes = SELECT * FROM if(condition=ProcessRegex, then={SELECT * FROM pslist() WHERE Exe=~ProcessRegex})
+        LET processes = SELECT * FROM if(condition=ScanProcesses, then={SELECT * FROM pslist()})
         
         -- Scan the host
         LET Toolzip <= SELECT OSPath FROM Artifact.Generic.Utils.FetchBinary(ToolName="yara64", IsExecutable=FALSE)
