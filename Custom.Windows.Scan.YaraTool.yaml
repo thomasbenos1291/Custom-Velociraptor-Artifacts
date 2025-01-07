@@ -22,7 +22,7 @@ parameters:
     description: Perform recursive scan
     default: TRUE
   - name: ProcessRegex
-    description: If set, will scan processes by name that matches that regex or by pid equal to the provided number. Leave blank in order to not scan processes.
+    description: If set, will scan processes by name that matches that regex. Leave blank in order to not scan processes.
     type: string
     default: .
   - name: ThreadLimit
@@ -83,7 +83,7 @@ parameters:
 sources:
   - query: |
         --Get the processes table
-        LET processes = SELECT * FROM if(condition=ProcessRegex, then={SELECT * FROM pslist() WHERE Exe=~ProcessRegex OR Pid=int(int=ProcessRegex)})
+        LET processes = SELECT * FROM if(condition=ProcessRegex, then={SELECT * FROM pslist() WHERE Exe=~ProcessRegex})
         
         -- Scan the host
         LET Toolzip <= SELECT OSPath FROM Artifact.Generic.Utils.FetchBinary(ToolName="yara64", IsExecutable=FALSE)
@@ -98,8 +98,7 @@ sources:
         
         LET dir_command = '& "'+TmpDir+'\\yara64\.exe" '+if(condition=Recurse, then="-r", else="")+' -m "'+TmpDir+'\\yara_rule\.yar" "'+TargetDir+'" -p '+str(str=ThreadLimit)
         
-        LET pid_command(Pid) = "yara64\.exe"+if(condition=Recurse, then="-r", else="")+" -m yara_rule\.yar "+str(str=Pid)+" -p "+str(str=ThreadLimit)
-        
+        LET pid_command(Pid) = "yara64\.exe -m yara_rule\.yar "+str(str=Pid)+" -p "+str(str=ThreadLimit)
         
         LET powershell_exec(command) = SELECT * FROM execve(cwd=TmpDir, argv=["powershell\.exe","-ExecutionPolicy", "Unrestricted", "-encodedCommand",base64encode(string=utf16_encode(string=command))]) 
         WHERE log(message=Stderr) AND log(message=Stdout)
@@ -123,4 +122,5 @@ sources:
         SELECT Parsed.yara_rule AS YaraRule, Parsed.metadata AS RuleMetadata, Parsed.file_path AS Matched,
         --also process characteristics for pid matched
         {SELECT Ppid, Name, Username, CommandLine, Exe, TokenIsElevated, CreateTime, IsWow64 FROM processes WHERE str(str=Pid)=Parsed.file_path} as ProcDetails
-        FROM ParsedData WHERE Matched
+        FROM ParsedData
+        WHERE Matched
