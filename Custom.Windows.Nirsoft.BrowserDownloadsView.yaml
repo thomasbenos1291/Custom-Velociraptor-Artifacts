@@ -1,0 +1,46 @@
+name: Custom.Windows.Nirsoft.BrowserDownloadsView
+description: |
+        BrowserDownloadsView is a tool for Windows that displays the details of downloaded files of Chrome and Firefox Web browsers. For every download, the following information is displayed: Filename, Download URL, Web Page URL, Start Time, End Time, Download Duration, Download Size, Web Browser, and more...
+        
+
+author: Thomas Benos
+
+tools:
+ - name: browserdownloadsview
+   url: https://www.nirsoft.net/utils/browserdownloadsview-x64.zip
+   
+precondition: SELECT OS From info() where OS = 'windows'
+
+sources:
+ - name: Upload
+   query: |
+   
+        LET Hostname <= SELECT Hostname as Host FROM info()
+        
+        -- Fetch the binary
+        LET Toolzip <= SELECT FullPath
+        FROM Artifact.Generic.Utils.FetchBinary(ToolName="browserdownloadsview", IsExecutable=FALSE)
+
+        LET TmpDir <= tempdir()
+
+        -- Unzip the binary
+        LET _ <= SELECT * FROM unzip(filename=Toolzip.FullPath, output_directory=TmpDir)
+
+        -- Set EXE
+        LET BrowserDownloadsViewExe <= TmpDir + '\\BrowserDownloadsView.exe'
+        
+        -- Build the exec command
+        LET BrowserDownloadsViewCmd <= filter(list=(BrowserDownloadsViewExe, "/scomma", TmpDir + "\\" + Hostname.Host[0] + "-BrowserDownloadsView.csv" )
+        ,  regex=".+")
+        
+        -- Run the tool.
+        LET ExecBrowserDownloadsView <= SELECT *
+        FROM execve(argv=BrowserDownloadsViewCmd,sep="\n", length=10000)
+        
+        -- Upload CSV to the hunt
+        LET Upload <= SELECT Name, upload(file=FullPath,name=relpath(base=TmpDir + Hostname.Host[0] + "-BrowserDownloadsView.csv", path=FullPath)) as FileDetails
+        FROM glob(globs="/**", root=TmpDir)
+        WHERE Name =~ "(csv)$"
+        
+        -- Parse CSV to Notebook
+        SELECT * FROM parse_csv(filename= TmpDir + "\\" + Hostname.Host[0] + "-BrowserDownloadsView.csv")
