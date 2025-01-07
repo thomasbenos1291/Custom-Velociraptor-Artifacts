@@ -1,0 +1,79 @@
+name: Server.Enrichment.AlienVault
+author: Thomas Benos -- @thomasbenos1291
+description: |
+  Submit a file hash or an ip address to Alienvault for details.
+
+  This artifact can be called from within another artifact (such as one looking for files) to enrich the data made available by that artifact.
+
+  Ex.
+
+    `SELECT * from Artifact.Server.Enrichment.Alienvault(HASH=$YOURHASH)`
+    `SELECT * from Artifact.Server.Enrichment.Alienvault(IP_ADDRESS=$YOURIP)`
+    
+  If you enter both paramters, only the hash parameter will be calculated.
+  Not entering any parameter will trigger an error.
+
+type: SERVER
+
+parameters:
+    - name: HASH
+      type: string
+      description: The file hash to submit to AlienVault (MD5, SHA1, SHA256).
+      default:
+      
+    - name: IP_ADDRESS
+      type: string
+      description: The ip address to submit to AlienVault (MD5, SHA1, SHA256). If the HASH parameter is not empty, this will not be calculated.
+      default:  
+
+    - name: OTXKey
+      type: string
+      description: API key for AlienVault. Leave blank here if using server metadata store (must be named "OTXKey").
+      default:
+
+sources:
+  - query: |
+        
+        LET otx_api_key= server_metadata().OTXKey || OTXKey
+        
+        LET hash_request(file_hash) = 
+                 SELECT parse_json(data=Content) as response
+                   FROM http_client(
+                     method="GET",
+                     url=format(format='https://otx.alienvault.com/api/v1/indicators/file/%v/analysis', args=[file_hash]),
+                     headers=dict(
+                     `X-OTX-API-KEY`=otx_api_key
+                     )
+               )
+        
+        LET ip_request(ip_add) = 
+                 SELECT parse_json(data=Content) as response
+                   FROM http_client(
+                     method="GET",
+                     url=format(format='https://otx.alienvault.com/api/v1/indicators/IPv4/%v/general', args=[ip_add]),
+                     headers=dict(
+                     `X-OTX-API-KEY`=otx_api_key
+                     )
+               )
+        
+        LET hash_analysis(file_hash) = 
+        SELECT response.analysis.plugins.avast.results.detection as AvastDetection,
+        response.analysis.plugins.clamav.results.detection as ClamAVDetection,
+        response.analysis.plugins.msdefender.results.detection as MSDefenderDetection,
+        response.analysis.plugins.yarad.results.detection.rule_name as YaraMatched,
+        response.analysis.plugins.cobaltstrike.results as CobaltStrikeMatch,
+        response.analysis.plugins.cuckoo.result.info.combined_score as CuckooScore 
+        FROM hash_request(file_hash=file_hash)
+        WHERE AvastDetection or ClamAVDetection or MSDefenderDetection or YaraMatched[0] or CobaltStrikeMatch or CuckooScore > 3
+        
+        LET ip_analysis(ip_add) = 
+        SELECT 
+        response.base_indicator.id as IndicatorId,
+        response.base_indicator.indicator as Indicator,
+        response.pulse_info.count as AlienVaultPulseCount,
+        response.pulse_info.pulses.tags as Tags,
+        response.pulse_info.pulses.malware_families.id as MalwareFamilies
+        FROM ip_request(ip_add=ip_add)
+        WHERE AlienVaultPulseCount > 0
+        
+        SELECT * FROM if(condition=HASH, then=hash_analysis(file_hash=HASH), else=ip_analysis(ip_add=IP_ADDRESS))
