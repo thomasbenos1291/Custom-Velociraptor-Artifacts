@@ -263,7 +263,7 @@ sources:
                         WHERE PebBaseAddress = VadBaseAddress
         } as Modules FROM hits
         WHERE (NOT MappingName AND Modules.ExePath)
-                        OR Protection =~ ProtectionRegex
+                        OR (NOT MappingName AND Protection =~ ProtectionRegex)
                         OR ((Modules.ExePath AND MappingName) AND NOT lowcase(string=regex_replace(re='''^(.+?\:\\)''', replace="", source=Modules.ExePath)) IN lowcase(string=MappingName))
 
           
