@@ -124,13 +124,13 @@ sources:
           })
           -- WHERE DomainRole =~ "Controller"
 
-    # name: Users 
-    
-    #  SELECT * FROM if(
-    #    condition={SELECT OS From info() where OS = 'windows'},
-    #    then={SELECT Name, Description, Mtime AS LastLogin FROM Artifact.Windows.Sys.Users()},
-    #    else={SELECT * FROM Artifact.Linux.Sys.Users()}
-    #  )
+  - name: Users 
+    query: |  
+          SELECT * FROM if(
+            condition={SELECT OS From info() where OS = 'windows'},
+            then={SELECT Mtime as LastLogin, Name, Description, Directory, UUID, HomedirMtime FROM Artifact.Windows.Sys.AllUsers() ORDER BY LastLogin DESC},
+            else={SELECT * FROM Artifact.Linux.Sys.Users()}
+          )
     
       
     # name: Processes
@@ -222,7 +222,7 @@ reports:
       {{ end }}
       
       # Active Users
-      {{ Query "SELECT * FROM source(source='Users')" | Table }}
+      {{ Query "SELECT * FROM source(source='Active Users')" | Table }}
       
 column_types:
   - name: BuildTime
