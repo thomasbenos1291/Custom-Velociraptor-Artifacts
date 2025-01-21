@@ -1,29 +1,30 @@
 name: Custom.Server.Utils.DeleteDuplicateClients
 description: |
-   Finds and deletes duplicate clients. Keeps the most recent.
+    Finds and deletes duplicate clients. Keeps the most recent.
 
 type: SERVER
 
 sources:
   - query: |
-        LET initial = SELECT client_id, os_info.hostname as hostname, last_seen_at, count() as count FROM clients()
+        LET initial <= SELECT client_id, os_info.hostname as hostname, last_seen_at, count() as count FROM clients() WHERE hostname
         GROUP BY os_info.hostname
         ORDER BY count DESC
         
-        LET duplicates = SELECT hostname FROM initial WHERE count > 1
+        LET duplicates <=
+        SELECT * FROM foreach(
+        row={SELECT * FROM initial WHERE count > 1},
+        query={SELECT client_id, os_info.hostname as host, timestamp(epoch=last_seen_at - now()) as diff FROM clients() WHERE hostname = host}
+        ) ORDER BY diff DESC
         
-        LET clients_to_keep = 
+        LET keep_client(hostname) =
+        SELECT * FROM duplicates WHERE lowcase(string=host)=lowcase(string=hostname)
+        ORDER BY diff DESC LIMIT 1
+        
+        LET clients_to_keep <=
         SELECT * FROM foreach(
         row=duplicates,
-        query={SELECT client_id, os_info.hostname, last_seen_at - now() as diff FROM clients() 
-        WHERE os_info.hostname = hostname ORDER BY diff LIMIT 1
-        }
-        )
+        query={SELECT * FROM keep_client(hostname=host)}
+        ) GROUP BY client_id
         
-        SELECT client_id, os_info.hostname, last_seen_at - now() as diff,
-        {SELECT * FROM client_delete(client_id=client_id, really_do_it=TRUE)} as Deleted
-        FROM clients() 
-        WHERE os_info.hostname IN duplicates.hostname
-        AND NOT client_id IN clients_to_keep.client_id 
-        ORDER BY diff
-        
+        SELECT *, {SELECT * FROM client_delete(client_id=client_id)} as deleted FROM duplicates
+        WHERE NOT client_id IN clients_to_keep.client_id
