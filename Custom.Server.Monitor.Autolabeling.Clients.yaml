@@ -74,7 +74,7 @@ sources:
         g={SELECT * FROM if(condition=check_username[0].username != Null,
         then={SELECT *,label(client_id=ClientId, labels=`Computer Info`.UserName, op="set") FROM source(artifact="Custom.Generic.Client.Info/AgentInfo")}   
         )},
-         h={SELECT *,label(client_id=ClientId, labels=Platform, op="set") FROM source(artifact="Custom.Generic.Client.Info/BasicInformation")}
+         h={SELECT *,label(client_id=ClientId, labels=[Platform, Version], op="set") FROM source(artifact="Custom.Generic.Client.Info/BasicInformation")}
     )
        
     SELECT * FROM foreach(row=interrogations, query=matches)
