@@ -1,0 +1,49 @@
+name: Custom.Windows.Network.SuricataMonitor
+description: |
+    
+author: Thomas Benos
+
+type: CLIENT_EVENT
+
+reference: 
+
+parameters:
+  - name: Period
+    default: 2
+    type: int
+    description: how many seconds the artifact waits between checking for changes  
+  - name: ProcInfo
+    type: bool
+    description: if selected, will also fetch process info
+    default: N
+
+precondition: 
+  SELECT OS From info() where OS = 'windows'
+  
+sources:
+  - query:  |
+      
+      --LET checkService = SELECT Name, PathName, ProcessId, Started, StartMode, State FROM wmi(query="SELECT * From Win32_service", namespace="root/CIMV2") WHERE Name =~ 'Suricata' and State =~ 'Running'
+                                
+      --LET install_suricata = SELECT * FROM Artifact.Custom.Windows.Network.SuricataInstall() WHERE log(message="Suricata is not running, installing...")                      
+                                
+      --LET _ <= SELECT * FROM if(condition=NOT checkService[0], then=install_suricata)                             
+      
+      LET SuricataOutput = SELECT *, format(format="%v %v %v %v %v %v %v", 
+      args=[timestamp, flow_id, in_iface, event_type, src_ip, dest_ip, proto]) AS _DiffKey 
+      FROM parse_jsonl(filename="C:\\Program Files\\Suricata\\log\\eve\.json") WHERE NOT event_type="stats"
+          
+      LET EventQuery = SELECT * FROM diff(query=SuricataOutput, period=Period, key="_DiffKey")
+      
+      //Function to get the pid of a running process that does the network connection
+      LET find_pid(src_ip, src_port, dest_ip, dest_port) = SELECT Pid FROM netstat() WHERE Laddr.IP = src_ip, str(str=Laddr.Port) = src_port, Raddr.IP = dest_ip AND str(str=Raddr.Port) = dest_port
+        
+      //Function to build the process info
+      LET proc_info(src_ip, src_port, dest_ip, dest_port) = SELECT process_tracker_get(id=find_pid(src_ip=src_ip, src_port=src_port, dest_ip=dest_ip, dest_port=dest_port)[0].Pid) as ProcessInfo, 
+      join(array=process_tracker_callchain(id=find_pid(src_ip=src_ip, src_port=src_port, dest_ip=dest_ip, dest_port=dest_port)[0].Pid).Data.CommandLine, sep=" => ") AS CallChain FROM scope()
+       
+       
+      //Project the results
+      SELECT *, if(condition=ProcInfo, then=
+      proc_info(src_ip=src_ip, src_port=src_port, dest_ip=dest_ip, dest_port=dest_port)[0]) 
+      AS ProcessInfo FROM EventQuery
