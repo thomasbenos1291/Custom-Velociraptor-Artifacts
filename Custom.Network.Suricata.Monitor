@@ -1,0 +1,22 @@
+name: Custom.Network.Suricata.Monitor
+description: |
+   This artifact watches eve.json for new events
+
+type: CLIENT_EVENT
+
+parameters:
+   - name: log_regex
+     default: .
+   - name: log_glob
+     default: /var/log/suricata/*/eve.json     
+
+sources:
+  - query: |
+
+        LET logs =
+        SELECT * FROM glob(globs=log_glob)
+        WHERE Name =~ log_regex
+        
+        SELECT * FROM foreach(row=logs,query={
+        SELECT * FROM watch_jsonl(filename=OSPath)
+        })
