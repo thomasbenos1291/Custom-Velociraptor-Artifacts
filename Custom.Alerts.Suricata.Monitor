@@ -1,0 +1,22 @@
+name: Custom.Alerts.Suricata.Monitor
+description: |
+   This artifact watches eve.json for new events
+
+type: SERVER_EVENT
+
+parameters:
+   - name: event_type_regex
+     default: alert
+   - name: severity_regex
+     default: 1|2
+     description: |
+        1 - Critical/Highest - Indicates an active compromise or exploit attempt. The system is likely compromised based on detected activity.	
+        2 - Major/Medium - Active attempts to compromise a service or end system. Serious threats but not as immediate as Level 1.	
+        3 - Minor/Lowest - Often associated with reconnaissance, scanning, and profiling activities. May precede malicious activity but not immediately dangerous. Includes generic protocol issues and informational alerts.	
+
+sources:
+  - query: |
+        
+        SELECT * FROM watch_monitoring(artifact="Custom.Network.Suricata.Monitor")
+        WHERE event_type =~ event_type_regex
+        AND severity =~ severity_regex
