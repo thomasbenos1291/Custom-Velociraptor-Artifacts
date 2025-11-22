@@ -1,0 +1,22 @@
+name: Custom.Network.Suricata.Triage
+description: |
+   This artifact parses eve.json for events
+
+type: CLIENT
+
+parameters:
+   - name: log_regex
+     default: .
+   - name: log_glob
+     default: /var/log/suricata/*/eve.json     
+
+sources:
+  - query: |
+
+        LET logs =
+        SELECT * FROM glob(globs=log_glob)
+        WHERE Name =~ log_regex
+        
+        SELECT timestamp(string=`timestamp`) as `timestamp`,* FROM foreach(row=logs,query={
+        SELECT * FROM parse_jsonl(filename=OSPath)
+        })
