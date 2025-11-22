@@ -17,6 +17,6 @@ sources:
         SELECT * FROM glob(globs=log_glob)
         WHERE Name =~ log_regex
         
-        SELECT * FROM foreach(row=logs,query={
+        SELECT timestamp(string=`timestamp`) as `timestamp`,* FROM foreach(row=logs,query={
         SELECT * FROM watch_jsonl(filename=OSPath)
         })
